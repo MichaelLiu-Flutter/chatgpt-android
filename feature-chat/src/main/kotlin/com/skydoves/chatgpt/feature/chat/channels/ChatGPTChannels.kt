@@ -19,7 +19,10 @@
 package com.skydoves.chatgpt.feature.chat.channels
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -27,8 +30,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddComment
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,6 +44,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.style.TextAlign
@@ -50,6 +57,7 @@ import com.skydoves.chatgpt.core.designsystem.composition.LocalOnFinishDispatche
 import com.skydoves.chatgpt.core.designsystem.theme.STREAM_PRIMARY
 import com.skydoves.chatgpt.core.navigation.AppComposeNavigator
 import com.skydoves.chatgpt.core.navigation.ChatGPTScreens
+import com.skydoves.chatgpt.feature.chat.BuildConfig
 import com.skydoves.chatgpt.feature.chat.R
 import com.skydoves.chatgpt.feature.chat.theme.ChatGPTStreamTheme
 import io.getstream.chat.android.compose.ui.channels.ChannelsScreen
@@ -58,10 +66,67 @@ import io.getstream.chat.android.compose.ui.channels.ChannelsScreen
 fun ChatGPTChannels(
   modifier: Modifier,
   composeNavigator: AppComposeNavigator,
-  viewModel: ChatGPTChannelsViewModel = hiltViewModel(),
+  viewModel: ChatGPTChannelsViewModel? = null,
   onFinishDispatcher: (() -> Unit)? = LocalOnFinishDispatcher.current
 ) {
-  val uiState by viewModel.channelUiState.collectAsStateWithLifecycle()
+  val isStreamEnabled = BuildConfig.STREAM_API_KEY.isNotBlank() &&
+    BuildConfig.STREAM_API_KEY != "aaaaaaaaaa"
+
+  if (!isStreamEnabled) {
+    BackHandler(enabled = true) { onFinishDispatcher?.invoke() }
+
+    ChatGPTStreamTheme {
+      Box(
+        modifier = modifier
+          .fillMaxSize()
+          .semantics { testTagsAsResourceId = true }
+      ) {
+        Column(
+          modifier = Modifier
+            .align(Alignment.Center)
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp),
+          verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+          Text(
+            text = stringResource(id = R.string.local_mode_history_title),
+            style = MaterialTheme.typography.titleMedium
+          )
+          Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+              verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              Text(
+                text = stringResource(id = R.string.local_mode_title),
+                style = MaterialTheme.typography.titleSmall
+              )
+              Text(
+                text = stringResource(id = R.string.local_mode_history_description),
+                style = MaterialTheme.typography.bodySmall
+              )
+              Button(
+                modifier = Modifier.align(Alignment.End),
+                onClick = {
+                  composeNavigator.navigate(
+                    ChatGPTScreens.Messages.createRoute(ChatGPTScreens.local_channel_id)
+                  )
+                }
+              ) {
+                Text(text = stringResource(id = R.string.local_mode_open_chat))
+              }
+            }
+          }
+        }
+      }
+    }
+    return
+  }
+
+  val channelsViewModel: ChatGPTChannelsViewModel = viewModel ?: hiltViewModel()
+  val uiState by channelsViewModel.channelUiState.collectAsStateWithLifecycle()
 
   HandleGPTChannelsUiState(uiState = uiState)
 
@@ -79,7 +144,7 @@ fun ChatGPTChannels(
         onBackPressed = { onFinishDispatcher?.invoke() }
       )
 
-      val isBalloonDisplayed by viewModel.isBalloonDisplayedState.collectAsStateWithLifecycle()
+      val isBalloonDisplayed by channelsViewModel.isBalloonDisplayedState.collectAsStateWithLifecycle()
 
       Balloon(
         modifier = Modifier
@@ -105,7 +170,7 @@ fun ChatGPTChannels(
           }
 
           balloonWindow.setOnBalloonDismissListener {
-            viewModel.balloonChannelDisplayed()
+            channelsViewModel.balloonChannelDisplayed()
             balloonWindow.dismiss()
           }
         }
@@ -114,7 +179,7 @@ fun ChatGPTChannels(
           modifier = Modifier.matchParentSize(),
           containerColor = STREAM_PRIMARY,
           shape = CircleShape,
-          onClick = { viewModel.handleEvents(GPTChannelEvent.CreateChannel) }
+          onClick = { channelsViewModel.handleEvents(GPTChannelEvent.CreateChannel) }
         ) {
           Icon(
             imageVector = Icons.Filled.AddComment,

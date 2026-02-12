@@ -21,12 +21,16 @@ import androidx.lifecycle.viewModelScope
 import com.skydoves.chatgpt.core.data.repository.GPTMessageRepository
 import com.skydoves.chatgpt.core.model.GPTMessage
 import com.skydoves.chatgpt.core.model.network.GPTChatRequest
+import com.skydoves.chatgpt.core.model.network.GPTChatResponse
+import com.skydoves.chatgpt.core.model.network.GPTReasoning
 import com.skydoves.chatgpt.feature.chat.BuildConfig
+import com.skydoves.sandwich.ApiResponse
 import com.skydoves.sandwich.getOrThrow
 import com.skydoves.sandwich.isSuccess
 import com.skydoves.sandwich.messageOrNull
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -54,32 +58,80 @@ class LocalChatViewModel @Inject constructor(
 
     viewModelScope.launch {
       _sending.value = true
-      val history = _messages.value.map {
-        GPTMessage(role = it.role, content = it.content)
-      }
-      val request = GPTChatRequest(
-        model = BuildConfig.GPT_MODEL,
-        messages = history
-      )
+      try {
+        val history = _messages.value
+          .asSequence()
+          .filterNot(LocalChatMessage::isError)
+          .map { message -> GPTMessage(role = message.role, content = message.content) }
+          .toList()
+        val request = GPTChatRequest(
+          model = BuildConfig.GPT_MODEL,
+          messages = history
+        )
 
-      val response = repository.sendMessage(request)
-      if (response.isSuccess) {
-        val assistantText = response.getOrThrow().extractAssistantText()
-        _messages.update { current ->
-          current + LocalChatMessage(role = "assistant", content = assistantText)
+        val response = sendMessageWithFallback(request)
+        if (response.isSuccess) {
+          val chatResponse = response.getOrThrow()
+          val assistantText = chatResponse.extractAssistantText()
+          val reasoningText = chatResponse.extractReasoningText()
+          _messages.update { current ->
+            current + LocalChatMessage(
+              role = "assistant",
+              content = assistantText,
+              reasoning = reasoningText.takeIf { it.isNotBlank() }
+            )
+          }
+        } else {
+          val errorText = response.messageOrNull ?: "request failed"
+          _messages.update { current ->
+            current + LocalChatMessage(
+              role = "assistant",
+              content = "Error: $errorText",
+              isError = true
+            )
+          }
         }
-      } else {
-        val errorText = response.messageOrNull ?: "request failed"
+      } catch (cancellationException: CancellationException) {
+        throw cancellationException
+      } catch (throwable: Throwable) {
+        val errorText = throwable.message ?: "request failed"
         _messages.update { current ->
-          current + LocalChatMessage(role = "assistant", content = "Error: $errorText")
+          current + LocalChatMessage(
+            role = "assistant",
+            content = "Error: $errorText",
+            isError = true
+          )
         }
+      } finally {
+        _sending.value = false
       }
-      _sending.value = false
     }
+  }
+
+  private suspend fun sendMessageWithFallback(
+    request: GPTChatRequest
+  ): ApiResponse<GPTChatResponse> {
+    val primary = repository.sendMessage(request)
+    if (!primary.isStreamResetCancel()) return primary
+
+    val lowerReasoningRequest = request.copy(reasoning = GPTReasoning(effort = "none"))
+    val retryWithoutReasoning = repository.sendMessage(lowerReasoningRequest)
+    if (!retryWithoutReasoning.isStreamResetCancel() || request.tools.isEmpty()) {
+      return retryWithoutReasoning
+    }
+
+    return repository.sendMessage(lowerReasoningRequest.copy(tools = emptyList()))
+  }
+
+  private fun ApiResponse<GPTChatResponse>.isStreamResetCancel(): Boolean {
+    val message = messageOrNull.orEmpty().lowercase()
+    return "stream was reset: cancel" in message || "http2 framing layer" in message
   }
 }
 
 data class LocalChatMessage(
   val role: String,
-  val content: String
+  val content: String,
+  val reasoning: String? = null,
+  val isError: Boolean = false
 )

@@ -33,7 +33,7 @@ fun ChatGPTNavHost(
   val startDestination = if (isStreamEnabled) {
     ChatGPTScreens.Login.route
   } else {
-    ChatGPTScreens.Messages.createRoute(ChatGPTScreens.local_channel_id)
+    ChatGPTScreens.Channels.route
   }
 
   NavHost(

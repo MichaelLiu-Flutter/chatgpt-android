@@ -37,20 +37,24 @@ import retrofit2.create
 internal object NetworkModule {
 
   private const val DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/"
+  private const val CONNECT_TIMEOUT_SECONDS = 1200L
 
   @Provides
   @Singleton
   fun provideOkHttpClient(): OkHttpClient {
     return OkHttpClient.Builder()
       .addInterceptor(GPTInterceptor())
-      .connectTimeout(60, TimeUnit.SECONDS)
-      .readTimeout(60, TimeUnit.SECONDS)
-      .writeTimeout(15, TimeUnit.SECONDS)
+      .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+      // 0 means no timeout limit for read/write/call.
+      .readTimeout(0, TimeUnit.SECONDS)
+      .writeTimeout(0, TimeUnit.SECONDS)
+      .callTimeout(0, TimeUnit.SECONDS)
       .apply {
         if (BuildConfig.DEBUG) {
           this.addNetworkInterceptor(
             HttpLoggingInterceptor().apply {
               level = HttpLoggingInterceptor.Level.BODY
+              redactHeader("Authorization")
             }
           )
         }

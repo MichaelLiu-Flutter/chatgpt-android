@@ -46,6 +46,9 @@ dependencies {
   implementation(libs.hilt.worker)
 
   implementation(libs.balloon.compose)
+
+  testImplementation(libs.junit)
+  testImplementation(libs.kotlinx.coroutines.test)
 }
 
 secrets {

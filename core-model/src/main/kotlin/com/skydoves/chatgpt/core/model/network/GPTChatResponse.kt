@@ -55,9 +55,25 @@ data class GPTChatResponse(
     return choices.firstOrNull()?.message?.content.orEmpty()
   }
 
+  fun extractReasoningText(): String = output
+    .asSequence()
+    .filter { item -> item.type == REASONING_TYPE }
+    .flatMap { item ->
+      buildList {
+        item.summary.orEmpty().mapNotNullTo(this) { summary -> summary.text }
+        item.content.orEmpty().mapNotNullTo(this) { content -> content.text }
+        item.text?.let(::add)
+      }.asSequence()
+    }
+    .map(String::trim)
+    .filter(String::isNotEmpty)
+    .toList()
+    .joinToString(separator = "\n")
+
   private companion object {
     private const val ASSISTANT_ROLE = "assistant"
     private const val MESSAGE_TYPE = "message"
+    private const val REASONING_TYPE = "reasoning"
   }
 }
 
@@ -66,7 +82,14 @@ data class GPTResponseOutput(
   @field:Json(name = "type") val type: String? = null,
   @field:Json(name = "role") val role: String? = null,
   @field:Json(name = "text") val text: String? = null,
+  @field:Json(name = "summary") val summary: List<GPTResponseOutputSummary>? = null,
   @field:Json(name = "content") val content: List<GPTResponseOutputContent>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class GPTResponseOutputSummary(
+  @field:Json(name = "type") val type: String? = null,
+  @field:Json(name = "text") val text: String? = null
 )
 
 @JsonClass(generateAdapter = true)

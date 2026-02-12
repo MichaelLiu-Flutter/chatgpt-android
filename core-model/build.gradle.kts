@@ -28,4 +28,6 @@ dependencies {
   api(libs.stream.client)
   api(libs.moshi)
   ksp(libs.moshi.codegen)
+
+  testImplementation(libs.junit)
 }

@@ -20,8 +20,20 @@
   <string name="toast_hello">Hi, I\'m OpenAI\'s ChatGPT with Stream SDK. Ask me anything!</string>
   <string name="toast_error">For more details, check out OpenAI API guidelines: https://platform.openai.com/docs/guides/rate-limits?context=tier-free</string>
   <string name="local_mode_title">Local GPT Mode</string>
+  <string name="local_mode_history_title">Chat History</string>
+  <string name="local_mode_history_description">Stream is not configured. Use local session chat here.</string>
+  <string name="local_mode_open_chat">Open chat</string>
   <string name="local_mode_back">Back</string>
+  <string name="local_mode_subtitle_ready">%1$d messages in this chat</string>
+  <string name="local_mode_subtitle_sending">Assistant is thinking...</string>
+  <string name="local_mode_empty_title">Start your local conversation</string>
+  <string name="local_mode_empty_description">Ask anything and your local assistant will reply here.</string>
+  <string name="local_mode_user_label">You</string>
+  <string name="local_mode_assistant_label">Assistant</string>
   <string name="local_mode_input_placeholder">Type a message</string>
   <string name="local_mode_send">Send</string>
+  <string name="local_mode_reasoning_title">思考过程</string>
+  <string name="local_mode_reasoning_show">展开思考过程</string>
+  <string name="local_mode_reasoning_hide">收起思考过程</string>
   <string name="local_mode_empty_response">(empty)</string>
 </resources>
