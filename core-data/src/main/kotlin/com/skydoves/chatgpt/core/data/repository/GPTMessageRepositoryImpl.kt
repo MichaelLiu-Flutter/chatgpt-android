@@ -285,15 +285,20 @@ internal class GPTMessageRepositoryImpl @Inject constructor(
 
   private fun loadGptConfigsLocked(): List<GPTConfig> {
     val defaultConfig = defaultGptConfig()
-    val payload = preferences.sharedPreferences
-      .getString(GPTConfigPreferencesKeys.KEY_GPT_CONFIGS, null)
-      .orEmpty()
-    if (payload.isBlank()) {
-      return listOf(defaultConfig)
+    val payload = preferences.sharedPreferences.getString(GPTConfigPreferencesKeys.KEY_GPT_CONFIGS, null)
+    val presetConfigs = initialCustomGptConfigs()
+    if (payload.isNullOrBlank() || payload == "[]") {
+      saveCustomGptConfigsLocked(presetConfigs)
+      markPresetConfigsSeededLocked()
+      return listOf(defaultConfig) + presetConfigs
     }
 
-    val array = runCatching { JSONArray(payload) }.getOrElse { return listOf(defaultConfig) }
-    val customConfigs = buildList {
+    val array = runCatching { JSONArray(payload) }.getOrElse {
+      saveCustomGptConfigsLocked(presetConfigs)
+      markPresetConfigsSeededLocked()
+      return listOf(defaultConfig) + presetConfigs
+    }
+    val storedCustomConfigs = buildList {
       repeat(array.length()) { index ->
         val item = array.optJSONObject(index) ?: return@repeat
         val id = item.optNullableString(JSON_KEY_ID) ?: return@repeat
@@ -308,9 +313,19 @@ internal class GPTMessageRepositoryImpl @Inject constructor(
           )
         )
       }
-    }.distinctBy { it.id }
+    }.distinctBy { it.id }.sortedBy { it.name.lowercase() }
 
-    return listOf(defaultConfig) + customConfigs
+    if (isPresetConfigsSeededLocked()) {
+      return listOf(defaultConfig) + storedCustomConfigs
+    }
+
+    val mergedCustomConfigs = buildList {
+      addAll(storedCustomConfigs)
+      addAll(presetConfigs.filterNot { preset -> storedCustomConfigs.any { it.id == preset.id } })
+    }.distinctBy { it.id }.sortedBy { it.name.lowercase() }
+    saveCustomGptConfigsLocked(mergedCustomConfigs)
+    markPresetConfigsSeededLocked()
+    return listOf(defaultConfig) + mergedCustomConfigs
   }
 
   private fun saveCustomGptConfigsLocked(configs: List<GPTConfig>) {
@@ -355,6 +370,56 @@ internal class GPTMessageRepositoryImpl @Inject constructor(
     apiKey = NetworkBuildConfig.GPT_API_KEY,
     isDefault = true
   )
+
+  private fun initialCustomGptConfigs(): List<GPTConfig> = listOfNotNull(
+    createPresetConfig(
+      id = PRESET_CONFIG_ID_CODE2,
+      fallbackName = "YLSAGI",
+      name = NetworkBuildConfig.GPT_PRESET_1_NAME,
+      baseUrl = NetworkBuildConfig.GPT_PRESET_1_BASE_URL,
+      apiKey = NetworkBuildConfig.GPT_PRESET_1_API_KEY
+    ),
+    createPresetConfig(
+      id = PRESET_CONFIG_ID_88CODE,
+      fallbackName = "88Code",
+      name = NetworkBuildConfig.GPT_PRESET_2_NAME,
+      baseUrl = NetworkBuildConfig.GPT_PRESET_2_BASE_URL,
+      apiKey = NetworkBuildConfig.GPT_PRESET_2_API_KEY
+    ),
+    createPresetConfig(
+      id = PRESET_CONFIG_ID_PACKY,
+      fallbackName = "Packy API",
+      name = NetworkBuildConfig.GPT_PRESET_3_NAME,
+      baseUrl = NetworkBuildConfig.GPT_PRESET_3_BASE_URL,
+      apiKey = NetworkBuildConfig.GPT_PRESET_3_API_KEY
+    )
+  ).sortedBy { it.name.lowercase() }
+
+  private fun createPresetConfig(
+    id: String,
+    fallbackName: String,
+    name: String,
+    baseUrl: String,
+    apiKey: String
+  ): GPTConfig? {
+    if (baseUrl.isBlank() || apiKey.isBlank()) return null
+    return GPTConfig(
+      id = id,
+      name = name.ifBlank { fallbackName },
+      baseUrl = baseUrl,
+      apiKey = apiKey,
+      isDefault = false
+    ).normalizeCustomConfig()
+  }
+
+  private fun isPresetConfigsSeededLocked(): Boolean = preferences.sharedPreferences
+    .getBoolean(KEY_GPT_PRESET_CONFIGS_SEEDED, false)
+
+  private fun markPresetConfigsSeededLocked() {
+    preferences.sharedPreferences.edit {
+      putBoolean(KEY_GPT_PRESET_CONFIGS_SEEDED, true)
+    }
+  }
 
   private fun GPTConfig.normalizeCustomConfig(): GPTConfig = copy(
     id = id.trim().ifBlank { UUID.randomUUID().toString() },
@@ -510,6 +575,7 @@ internal class GPTMessageRepositoryImpl @Inject constructor(
   private companion object {
     private const val KEY_LOCAL_CHAT_SESSIONS = "key_local_chat_sessions"
     private const val KEY_LOCAL_CHAT_MESSAGES_PREFIX = "key_local_chat_messages_"
+    private const val KEY_GPT_PRESET_CONFIGS_SEEDED = "key_gpt_preset_configs_seeded"
 
     private const val JSON_KEY_ID = "id"
     private const val JSON_KEY_NAME = "name"
@@ -538,6 +604,10 @@ internal class GPTMessageRepositoryImpl @Inject constructor(
     private const val DEFAULT_CUSTOM_CONFIG_NAME = "Custom"
     private const val MAX_SESSION_TITLE_LENGTH = 60
     private const val MAX_PREVIEW_LENGTH = 80
+
+    private const val PRESET_CONFIG_ID_CODE2 = "preset_code2_ylsagi"
+    private const val PRESET_CONFIG_ID_88CODE = "preset_88code"
+    private const val PRESET_CONFIG_ID_PACKY = "preset_packyapi"
   }
 }
 

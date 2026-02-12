@@ -305,6 +305,95 @@ class LocalChatViewModelTest {
       assertFalse(viewModel.sending.value)
     }
 
+  @Test
+  fun loadSession_doesNotGetOverriddenByInitMostRecentSelection() =
+    runTest(mainDispatcherRule.dispatcher) {
+      val initGate = CompletableDeferred<Unit>()
+      val repository = object : GPTMessageRepository {
+        private val defaultConfig = GPTConfig(
+          id = "default",
+          name = "Default",
+          baseUrl = "",
+          apiKey = "",
+          isDefault = true
+        )
+        private var listCalls = 0
+
+        override suspend fun sendMessage(gptChatRequest: GPTChatRequest): ApiResponse<GPTChatResponse> {
+          throw AssertionError("sendMessage should not be called in this test")
+        }
+
+        override suspend fun listGptConfigs(): List<GPTConfig> = listOf(defaultConfig)
+
+        override suspend fun getActiveGptConfig(): GPTConfig = defaultConfig
+
+        override suspend fun setActiveGptConfig(configId: String) = Unit
+
+        override suspend fun upsertGptConfig(config: GPTConfig) = Unit
+
+        override suspend fun deleteGptConfig(configId: String) = Unit
+
+        override suspend fun listLocalChatSessions(): List<LocalChatSessionSummary> {
+          listCalls += 1
+          // First call (from init) is delayed so a later loadSession() can finish first.
+          if (listCalls == 1) initGate.await()
+          return listOf(
+            LocalChatSessionSummary(
+              id = "newest",
+              title = "Newest",
+              preview = "",
+              updatedAt = 2L,
+              messageCount = 1
+            ),
+            LocalChatSessionSummary(
+              id = "older",
+              title = "Older",
+              preview = "",
+              updatedAt = 1L,
+              messageCount = 1
+            )
+          )
+        }
+
+        override suspend fun deleteLocalChatSession(sessionId: String) = Unit
+
+        override suspend fun createLocalChatSession(): LocalChatSessionSummary {
+          throw AssertionError("createLocalChatSession should not be called in this test")
+        }
+
+        override suspend fun loadLocalChatSessionMessages(sessionId: String): List<LocalChatMessage> =
+          when (sessionId) {
+            "older" -> listOf(LocalChatMessage(role = "user", content = "older-msg"))
+            "newest" -> listOf(LocalChatMessage(role = "user", content = "newest-msg"))
+            else -> emptyList()
+          }
+
+        override suspend fun saveLocalChatSessionMessages(
+          sessionId: String,
+          messages: List<LocalChatMessage>
+        ): LocalChatSessionSummary {
+          throw AssertionError("saveLocalChatSessionMessages should not be called in this test")
+        }
+
+        override fun watchIsChannelMessageEmpty(cid: String): Flow<Boolean> = emptyFlow()
+      }
+
+      val viewModel = LocalChatViewModel(repository)
+
+      // Let init start and get stuck at the first listLocalChatSessions() call.
+      runCurrent()
+
+      viewModel.loadSession("older")
+      advanceUntilIdle()
+
+      // Now allow init to continue; it should not override the user-selected session.
+      initGate.complete(Unit)
+      advanceUntilIdle()
+
+      assertEquals("older", viewModel.activeSessionId.value)
+      assertEquals(listOf(LocalChatMessage(role = "user", content = "older-msg")), viewModel.messages.value)
+    }
+
   private class QueueingRepository(
     private val responses: ArrayDeque<ApiResponse<GPTChatResponse>>,
   ) : GPTMessageRepository {

@@ -16,6 +16,8 @@
 
 package com.skydoves.chatgpt.feature.chat.messages
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
 import android.text.method.LinkMovementMethod
@@ -43,6 +45,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -426,6 +429,7 @@ private fun LocalChatMessageBubble(
 ) {
   val isUser = message.role == USER_ROLE
   val streamingPlaceholder = stringResource(id = R.string.local_mode_streaming_placeholder)
+  val context = LocalContext.current
   val parsedMessage = remember(
     message.role,
     message.content,
@@ -497,6 +501,32 @@ private fun LocalChatMessageBubble(
               color = Color.White
             )
           } else {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.End
+            ) {
+              IconButton(
+                onClick = {
+                  val clip = ClipData.newPlainText(
+                    context.getString(R.string.local_mode_copy_answer),
+                    parsedMessage.answer
+                  )
+                  val clipboard = context.getSystemService(ClipboardManager::class.java)
+                  clipboard?.setPrimaryClip(clip)
+                  android.widget.Toast.makeText(
+                    context,
+                    context.getString(R.string.local_mode_copied_to_clipboard),
+                    android.widget.Toast.LENGTH_SHORT
+                  ).show()
+                }
+              ) {
+                Icon(
+                  imageVector = Icons.Filled.ContentCopy,
+                  contentDescription = stringResource(id = R.string.local_mode_copy_answer),
+                  tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+            }
             MarkdownMessageText(
               markdown = parsedMessage.answer,
               textColor = MaterialTheme.colorScheme.onSurface,
@@ -604,6 +634,8 @@ private fun MarkdownMessageText(
       TextView(context).apply {
         linksClickable = true
         movementMethod = LinkMovementMethod.getInstance()
+        // Make assistant answers selectable so users can long-press and copy.
+        setTextIsSelectable(true)
         includeFontPadding = false
       }
     },

@@ -26,6 +26,8 @@
   <string name="local_mode_back">Back</string>
   <string name="local_mode_new_chat">New chat</string>
   <string name="local_mode_delete_chat">Delete chat</string>
+  <string name="local_mode_copy_answer">Copy</string>
+  <string name="local_mode_copied_to_clipboard">Copied to clipboard</string>
   <string name="local_mode_pause">Pause</string>
   <string name="local_mode_subtitle_ready">%1$d messages in this chat</string>
   <string name="local_mode_subtitle_sending">Assistant is thinking...</string>

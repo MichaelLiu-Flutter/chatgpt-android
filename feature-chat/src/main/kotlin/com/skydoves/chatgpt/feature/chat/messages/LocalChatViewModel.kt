@@ -78,6 +78,9 @@ class LocalChatViewModel @Inject constructor(
 
     viewModelScope.launch {
       val localSessions = repository.listLocalChatSessions()
+      // If the UI requested a specific session (e.g., by navigation argument),
+      // avoid overriding it with the default "most recent" session during init.
+      if (_activeSessionId.value != null) return@launch
       if (localSessions.isEmpty()) {
         val session = repository.createLocalChatSession()
         _sessions.value = listOf(session)
@@ -279,13 +282,15 @@ class LocalChatViewModel @Inject constructor(
     if (sessionId.isBlank()) return
 
     viewModelScope.launch {
+      // Set the active session immediately to prevent init from racing and re-selecting
+      // the most recent session while this load is in-flight.
+      _activeSessionId.value = sessionId
       if (_sending.value) {
         pauseGenerating()
         currentSendJob?.join()
       }
 
       val messages = repository.loadLocalChatSessionMessages(sessionId)
-      _activeSessionId.value = sessionId
       _messages.value = messages
 
       val sessions = repository.listLocalChatSessions()
