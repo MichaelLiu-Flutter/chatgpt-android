@@ -19,4 +19,9 @@
   <string name="toast_success_create_channel">A random ChatGPT channel is created!</string>
   <string name="toast_hello">Hi, I\'m OpenAI\'s ChatGPT with Stream SDK. Ask me anything!</string>
   <string name="toast_error">For more details, check out OpenAI API guidelines: https://platform.openai.com/docs/guides/rate-limits?context=tier-free</string>
+  <string name="local_mode_title">Local GPT Mode</string>
+  <string name="local_mode_back">Back</string>
+  <string name="local_mode_input_placeholder">Type a message</string>
+  <string name="local_mode_send">Send</string>
+  <string name="local_mode_empty_response">(empty)</string>
 </resources>

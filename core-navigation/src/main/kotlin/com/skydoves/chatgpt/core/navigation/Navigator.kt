@@ -26,8 +26,8 @@ import kotlinx.coroutines.flow.onSubscription
 abstract class Navigator {
   val navigationCommands = MutableSharedFlow<NavigationCommand>(extraBufferCapacity = Int.MAX_VALUE)
 
-  // We use a StateFlow here to allow ViewModels to start observing navigation results before the initial composition,
-  // and still get the navigation result later
+  // We use a StateFlow so ViewModels can observe navigation results before initial composition
+  // and still receive the result later.
   val navControllerFlow = MutableStateFlow<NavController?>(null)
 
   fun navigateUp() {
@@ -44,22 +44,19 @@ abstract class AppComposeNavigator : Navigator() {
 
   suspend fun handleNavigationCommands(navController: NavController) {
     navigationCommands
-      .onSubscription { this@AppComposeNavigator.navControllerFlow.value = navController }
-      .onCompletion { this@AppComposeNavigator.navControllerFlow.value = null }
+      .onSubscription { navControllerFlow.value = navController }
+      .onCompletion { navControllerFlow.value = null }
       .collect { navController.handleComposeNavigationCommand(it) }
   }
 
   private fun NavController.handleComposeNavigationCommand(navigationCommand: NavigationCommand) {
     when (navigationCommand) {
-      is ComposeNavigationCommand.NavigateToRoute -> {
+      is ComposeNavigationCommand.NavigateToRoute ->
         navigate(navigationCommand.route, navigationCommand.options)
-      }
 
       NavigationCommand.NavigateUp -> navigateUp()
-      is ComposeNavigationCommand.PopUpToRoute -> popBackStack(
-        navigationCommand.route,
-        navigationCommand.inclusive
-      )
+      is ComposeNavigationCommand.PopUpToRoute ->
+        popBackStack(navigationCommand.route, navigationCommand.inclusive)
 
       is ComposeNavigationCommand.NavigateUpWithResult<*> -> {
         navUpWithResult(navigationCommand)
@@ -70,17 +67,16 @@ abstract class AppComposeNavigator : Navigator() {
   private fun NavController.navUpWithResult(
     navigationCommand: ComposeNavigationCommand.NavigateUpWithResult<*>
   ) {
-    val backStackEntry =
-      navigationCommand.route?.let { getBackStackEntry(it) }
-        ?: previousBackStackEntry
+    val targetRoute = navigationCommand.route
+    val backStackEntry = targetRoute?.let(::getBackStackEntry) ?: previousBackStackEntry
     backStackEntry?.savedStateHandle?.set(
       navigationCommand.key,
       navigationCommand.result
     )
 
-    navigationCommand.route?.let {
-      popBackStack(it, false)
-    } ?: run {
+    if (targetRoute != null) {
+      popBackStack(targetRoute, false)
+    } else {
       navigateUp()
     }
   }

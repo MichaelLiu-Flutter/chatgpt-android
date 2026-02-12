@@ -35,23 +35,20 @@ internal class GPTChannelRepositoryImpl @Inject constructor(
 ) : GPTChannelRepository {
 
   override suspend fun createRandomChannel(): Result<Channel> {
-    val userId = chatClient.getCurrentUser()?.id ?: ""
     return chatClient.createChannel(
       channelType = "messaging",
       channelId = UUID.randomUUID().toString(),
-      memberIds = listOf(userId, chatGPTUser.id),
+      memberIds = listOf(chatClient.getCurrentUser()?.id.orEmpty(), chatGPTUser.id),
       extraData = mapOf("name" to "ChatGPT ${Random().nextInt(99999)}")
     ).await()
   }
 
   override suspend fun joinTheCommonChannel(user: User) {
-    val channelClient = chatClient.channel(commonChannelId)
-    val result = channelClient.watch().await()
-    result.onSuccessSuspend { channel ->
-      val members = channel.members
-      val isExist = members.firstOrNull { it.user.id == user.id }
-      if (isExist == null) {
-        channelClient.addMembers(listOf(user.id)).await()
+    with(chatClient.channel(commonChannelId)) {
+      watch().await().onSuccessSuspend { channel ->
+        if (channel.members.none { it.user.id == user.id }) {
+          addMembers(listOf(user.id)).await()
+        }
       }
     }
   }

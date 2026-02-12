@@ -18,6 +18,7 @@ package com.skydoves.chatgpt.feature.login
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
@@ -55,14 +56,23 @@ fun ChatGPTLogin(
       .fillMaxSize()
       .background(BACKGROUND900)
   ) {
-    if (initializationState == InitializationState.INITIALIZING) {
-      CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-    } else if (initializationState == InitializationState.NOT_INITIALIZED) {
-      Text(
-        modifier = Modifier.padding(14.dp),
-        text = stringResource(id = R.string.error_chat_sdk_initialization),
-        color = WHITE200
-      )
-    }
+    ChatGPTLoginStateContent(initializationState)
+  }
+}
+
+@Composable
+private fun BoxScope.ChatGPTLoginStateContent(initializationState: InitializationState) {
+  when (initializationState) {
+    InitializationState.INITIALIZING -> CircularProgressIndicator(
+      modifier = Modifier.align(Alignment.Center)
+    )
+
+    InitializationState.NOT_INITIALIZED -> Text(
+      modifier = Modifier.padding(14.dp),
+      text = stringResource(id = R.string.error_chat_sdk_initialization),
+      color = WHITE200
+    )
+
+    else -> Unit
   }
 }

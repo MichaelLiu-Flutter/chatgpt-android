@@ -43,6 +43,7 @@ sealed class ChatGPTScreens(
 
   companion object {
     const val argument_channel_id = "channelId"
+    const val local_channel_id = "local-gpt"
   }
 }
 

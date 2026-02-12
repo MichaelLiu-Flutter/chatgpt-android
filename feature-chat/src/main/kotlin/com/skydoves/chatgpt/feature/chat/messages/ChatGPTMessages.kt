@@ -57,6 +57,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.skydoves.chatgpt.core.data.chat.chatGPTUser
 import com.skydoves.chatgpt.core.data.chat.commonChannelId
 import com.skydoves.chatgpt.core.navigation.AppComposeNavigator
+import com.skydoves.chatgpt.core.navigation.ChatGPTScreens
 import com.skydoves.chatgpt.feature.chat.R
 import com.skydoves.chatgpt.feature.chat.theme.ChatGPTStreamTheme
 import io.getstream.chat.android.compose.state.mediagallerypreview.MediaGalleryPreviewResult
@@ -95,7 +96,6 @@ import io.getstream.chat.android.ui.common.state.messages.list.SelectedMessageSt
 fun ChatGPTMessages(
   channelId: String,
   composeNavigator: AppComposeNavigator,
-  viewModel: ChatGPTMessagesViewModel = hiltViewModel(),
   messageLimit: Int = 30,
   showHeader: Boolean = true,
   enforceUniqueReactions: Boolean = true,
@@ -105,6 +105,13 @@ fun ChatGPTMessages(
   onBackPressed: () -> Unit = { composeNavigator.navigateUp() },
   onHeaderActionClick: (channel: Channel) -> Unit = {}
 ) {
+  if (channelId == ChatGPTScreens.local_channel_id) {
+    LocalChatGPTMessages(onBackPressed = onBackPressed)
+    return
+  }
+
+  val viewModel: ChatGPTMessagesViewModel = hiltViewModel()
+
   val factory = MessagesViewModelFactory(
     context = LocalContext.current,
     channelId = channelId,

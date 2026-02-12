@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import com.skydoves.chatgpt.R
@@ -59,8 +58,7 @@ fun NavGraphBuilder.chatGPTHomeNavigation(
     val channelId = it.arguments?.getString(argument_channel_id) ?: return@composable
     ChatGPTMessages(
       channelId = channelId,
-      composeNavigator = composeNavigator,
-      viewModel = hiltViewModel()
+      composeNavigator = composeNavigator
     )
   }
 }

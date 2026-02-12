@@ -42,18 +42,7 @@ class ChatGPTChannelsViewModel @Inject constructor(
   val isBalloonDisplayedState: StateFlow<Boolean> = isBalloonDisplayedMutableState
 
   init {
-    viewModelScope.launch {
-      gptChannelRepository.streamUserFlow().collect { user ->
-        user?.let {
-          gptChannelRepository.joinTheCommonChannel(it)
-        } ?: run {
-          streamLog {
-            "User is null. Please check the app README.md and ensure " +
-              "**Disable Auth Checks** is ON in the Dashboard"
-          }
-        }
-      }
-    }
+    observeUserState()
   }
 
   fun handleEvents(gptChannelEvent: GPTChannelEvent) {
@@ -65,20 +54,44 @@ class ChatGPTChannelsViewModel @Inject constructor(
   private fun createRandomChannel() {
     viewModelScope.launch {
       channelsMutableUiState.value = GPTChannelUiState.Loading
-      val result = gptChannelRepository.createRandomChannel()
-      result.onSuccessSuspend {
-        channelsMutableUiState.value = GPTChannelUiState.Success(it.id)
-        delay(100L)
-        channelsMutableUiState.value = GPTChannelUiState.Nothing
-      }.onError {
-        channelsMutableUiState.value = GPTChannelUiState.Error
-      }
+      gptChannelRepository.createRandomChannel()
+        .onSuccessSuspend {
+          channelsMutableUiState.value = GPTChannelUiState.Success(it.id)
+          delay(RESET_UI_STATE_DELAY_MILLIS)
+          channelsMutableUiState.value = GPTChannelUiState.Nothing
+        }
+        .onError {
+          channelsMutableUiState.value = GPTChannelUiState.Error
+        }
     }
   }
 
   fun balloonChannelDisplayed() {
     isBalloonDisplayedMutableState.value = true
     gptChannelRepository.balloonChannelDisplayed()
+  }
+
+  private fun observeUserState() {
+    viewModelScope.launch {
+      gptChannelRepository.streamUserFlow().collect { user ->
+        if (user != null) {
+          gptChannelRepository.joinTheCommonChannel(user)
+        } else {
+          logMissingUser()
+        }
+      }
+    }
+  }
+
+  private fun logMissingUser() {
+    streamLog {
+      "User is null. Please check the app README.md and ensure " +
+        "**Disable Auth Checks** is ON in the Dashboard"
+    }
+  }
+
+  private companion object {
+    const val RESET_UI_STATE_DELAY_MILLIS = 100L
   }
 }
 

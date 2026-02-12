@@ -23,17 +23,18 @@ import javax.inject.Inject
 class ChatGPTComposeNavigator @Inject constructor() : AppComposeNavigator() {
 
   override fun navigate(route: String, optionsBuilder: (NavOptionsBuilder.() -> Unit)?) {
-    val options = optionsBuilder?.let { navOptions(it) }
+    val options = optionsBuilder?.let(::navOptions)
     navigationCommands.tryEmit(ComposeNavigationCommand.NavigateToRoute(route, options))
   }
 
   override fun navigateAndClearBackStack(route: String) {
+    val clearBackStackOptions = navOptions {
+      popUpTo(0)
+    }
     navigationCommands.tryEmit(
       ComposeNavigationCommand.NavigateToRoute(
         route,
-        navOptions {
-          popUpTo(0)
-        }
+        clearBackStackOptions
       )
     )
   }

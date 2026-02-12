@@ -41,6 +41,10 @@ android {
   namespace = "com.skydoves.chatgpt"
   compileSdk = Configurations.compileSdk
 
+  buildFeatures {
+    buildConfig = true
+  }
+
   defaultConfig {
     applicationId = "com.skydoves.chatgpt"
     minSdk = Configurations.minSdk

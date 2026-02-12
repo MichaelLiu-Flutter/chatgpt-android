@@ -19,6 +19,7 @@ package com.skydoves.chatgpt.navigation
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
+import com.skydoves.chatgpt.BuildConfig
 import com.skydoves.chatgpt.core.navigation.AppComposeNavigator
 import com.skydoves.chatgpt.core.navigation.ChatGPTScreens
 
@@ -27,9 +28,17 @@ fun ChatGPTNavHost(
   navHostController: NavHostController,
   composeNavigator: AppComposeNavigator
 ) {
+  val isStreamEnabled = BuildConfig.STREAM_API_KEY.isNotBlank() &&
+    BuildConfig.STREAM_API_KEY != "aaaaaaaaaa"
+  val startDestination = if (isStreamEnabled) {
+    ChatGPTScreens.Login.route
+  } else {
+    ChatGPTScreens.Messages.createRoute(ChatGPTScreens.local_channel_id)
+  }
+
   NavHost(
     navController = navHostController,
-    startDestination = ChatGPTScreens.Login.route
+    startDestination = startDestination
   ) {
     chatGPTHomeNavigation(
       composeNavigator = composeNavigator

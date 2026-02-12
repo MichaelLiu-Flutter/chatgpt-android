@@ -24,6 +24,7 @@ import androidx.work.WorkerParameters
 import com.skydoves.chatgpt.core.data.repository.GPTMessageRepository
 import com.skydoves.chatgpt.core.model.GPTMessage
 import com.skydoves.chatgpt.core.model.network.GPTChatRequest
+import com.skydoves.chatgpt.feature.chat.BuildConfig
 import com.skydoves.chatgpt.feature.chat.di.ChatEntryPoint
 import com.skydoves.sandwich.getOrThrow
 import com.skydoves.sandwich.isSuccess
@@ -71,7 +72,7 @@ internal class ChatGPTMessageWorker @AssistedInject constructor(
     )
 
     val request = GPTChatRequest(
-      model = "gpt-3.5-turbo-0125",
+      model = BuildConfig.GPT_MODEL,
       messages = messages
     )
     val response = repository.sendMessage(request)

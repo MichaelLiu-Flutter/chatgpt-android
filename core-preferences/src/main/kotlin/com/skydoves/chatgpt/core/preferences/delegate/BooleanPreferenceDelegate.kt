@@ -29,17 +29,14 @@ class BooleanPreferenceDelegate(
   private val key: String,
   private val defaultValue: Boolean
 ) {
-  operator fun getValue(preferences: Preferences, property: KProperty<*>): Boolean {
-    return preferences.sharedPreferences.getBoolean(key, defaultValue)
-  }
+  operator fun getValue(preferences: Preferences, property: KProperty<*>): Boolean =
+    preferences.sharedPreferences.getBoolean(key, defaultValue)
 
   operator fun setValue(preferences: Preferences, property: KProperty<*>, value: Boolean?) {
-    if (value != null) {
-      preferences.sharedPreferences.edit {
+    preferences.sharedPreferences.edit {
+      if (value != null) {
         putBoolean(key, value)
-      }
-    } else {
-      preferences.sharedPreferences.edit {
+      } else {
         remove(key)
       }
     }

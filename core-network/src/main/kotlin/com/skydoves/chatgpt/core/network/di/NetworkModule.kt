@@ -36,6 +36,8 @@ import retrofit2.create
 @InstallIn(SingletonComponent::class)
 internal object NetworkModule {
 
+  private const val DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/"
+
   @Provides
   @Singleton
   fun provideOkHttpClient(): OkHttpClient {
@@ -59,9 +61,15 @@ internal object NetworkModule {
   @Provides
   @Singleton
   fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
+    val normalizedBaseUrl = BuildConfig.GPT_BASE_URL
+      .ifBlank { DEFAULT_OPENAI_BASE_URL }
+      .removeSuffix("/v1")
+      .removeSuffix("/v1/")
+      .let { if (it.endsWith('/')) it else "$it/" }
+
     return Retrofit.Builder()
       .client(okHttpClient)
-      .baseUrl("https://api.openai.com/")
+      .baseUrl(normalizedBaseUrl)
       .addConverterFactory(MoshiConverterFactory.create())
       .addCallAdapterFactory(ApiResponseCallAdapterFactory.create())
       .build()

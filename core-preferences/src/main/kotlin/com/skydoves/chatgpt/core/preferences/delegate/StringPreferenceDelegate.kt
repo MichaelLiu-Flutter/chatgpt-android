@@ -27,12 +27,9 @@ class StringPreferenceDelegate(
   private val key: String,
   private val defaultValue: String
 ) {
-  operator fun getValue(preferences: Preferences, property: KProperty<*>): String {
-    return preferences.sharedPreferences.getString(key, null) ?: let {
-      setValue(preferences, property, defaultValue)
-      defaultValue
-    }
-  }
+  operator fun getValue(preferences: Preferences, property: KProperty<*>): String =
+    preferences.sharedPreferences.getString(key, null)
+      ?: defaultValue.also { setValue(preferences, property, it) }
 
   operator fun setValue(preferences: Preferences, property: KProperty<*>, value: String) {
     preferences.sharedPreferences.edit { putString(key, value) }

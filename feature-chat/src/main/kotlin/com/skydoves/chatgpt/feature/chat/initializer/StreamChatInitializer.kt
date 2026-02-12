@@ -29,6 +29,7 @@ import io.getstream.chat.android.offline.plugin.factory.StreamOfflinePluginFacto
 import io.getstream.chat.android.state.plugin.config.StatePluginConfig
 import io.getstream.chat.android.state.plugin.factory.StreamStatePluginFactory
 import io.getstream.log.streamLog
+import io.getstream.result.Result
 import io.getstream.result.call.Call
 import javax.inject.Inject
 import kotlin.random.Random
@@ -45,16 +46,21 @@ class StreamChatInitializer : Initializer<Unit> {
     ChatEntryPoint.resolve(context).inject(this)
 
     streamLog { "StreamChatInitializer is initialized" }
+    val chatClient = buildChatClient(context)
+    connectUser(chatClient, createUser())
+  }
 
-    /**
-     * initialize a global instance of the [ChatClient].
-     * The ChatClient is the main entry point for all low-level operations on chat.
-     * e.g, connect/disconnect user to the server, send/update/pin message, etc.
-     */
+  override fun dependencies(): List<Class<out Initializer<*>>> =
+    listOf(StreamLogInitializer::class.java)
+
+  /**
+   * initialize a global instance of the [ChatClient].
+   * The ChatClient is the main entry point for all low-level operations on chat.
+   * e.g, connect/disconnect user to the server, send/update/pin message, etc.
+   */
+  private fun buildChatClient(context: Context): ChatClient {
     val logLevel = if (BuildConfig.DEBUG) ChatLogLevel.ALL else ChatLogLevel.NOTHING
-    val offlinePluginFactory = StreamOfflinePluginFactory(
-      appContext = context
-    )
+    val offlinePluginFactory = StreamOfflinePluginFactory(appContext = context)
     val statePluginFactory = StreamStatePluginFactory(
       config = StatePluginConfig(
         backgroundSyncEnabled = true,
@@ -62,30 +68,33 @@ class StreamChatInitializer : Initializer<Unit> {
       ),
       appContext = context
     )
-    val chatClient = ChatClient.Builder(BuildConfig.STREAM_API_KEY, context)
+    return ChatClient.Builder(BuildConfig.STREAM_API_KEY, context)
       .withPlugins(offlinePluginFactory, statePluginFactory)
       .logLevel(logLevel)
       .build()
+  }
 
-    val user = User(
-      id = preferences.userUUID,
-      name = "User ${Random.nextInt(10000)}",
-      image = "https://picsum.photos/id/${Random.nextInt(1000)}/300/300"
-    )
+  private fun createUser(): User = User(
+    id = preferences.userUUID,
+    name = "User ${Random.nextInt(10000)}",
+    image = "https://picsum.photos/id/${Random.nextInt(1000)}/300/300"
+  )
 
+  private fun connectUser(chatClient: ChatClient, user: User) {
     val token = chatClient.devToken(user.id)
     chatClient.connectUser(user, token).enqueue(object : Call.Callback<ConnectionData> {
-      override fun onResult(result: io.getstream.result.Result<ConnectionData>) {
+      override fun onResult(result: Result<ConnectionData>) {
         if (result.isFailure) {
-          streamLog {
-            "Can't connect user. Please check the app README.md and ensure " +
-              "**Disable Auth Checks** is ON in the Dashboard"
-          }
+          logConnectionFailure()
         }
       }
     })
   }
 
-  override fun dependencies(): List<Class<out Initializer<*>>> =
-    listOf(StreamLogInitializer::class.java)
+  private fun logConnectionFailure() {
+    streamLog {
+      "Can't connect user. Please check the app README.md and ensure " +
+        "**Disable Auth Checks** is ON in the Dashboard"
+    }
+  }
 }

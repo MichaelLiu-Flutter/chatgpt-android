@@ -23,13 +23,10 @@ import okhttp3.Response
 class GPTInterceptor @Inject constructor() : Interceptor {
 
   override fun intercept(chain: Interceptor.Chain): Response {
-    val originalRequest = chain.request()
-    val originalUrl = originalRequest.url
-    val url = originalUrl.newBuilder().build()
-    val requestBuilder = originalRequest.newBuilder().url(url).apply {
-      addHeader("Authorization", "Bearer ${BuildConfig.GPT_API_KEY}")
-    }
-    val request = requestBuilder.build()
+    val request = chain.request()
+      .newBuilder()
+      .addHeader("Authorization", "Bearer ${BuildConfig.GPT_API_KEY}")
+      .build()
     return chain.proceed(request)
   }
 }

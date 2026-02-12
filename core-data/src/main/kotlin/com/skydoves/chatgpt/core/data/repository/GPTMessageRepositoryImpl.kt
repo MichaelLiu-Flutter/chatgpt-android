@@ -36,15 +36,12 @@ internal class GPTMessageRepositoryImpl @Inject constructor(
   private val chatGptService: ChatGPTService
 ) : GPTMessageRepository {
 
-  override suspend fun sendMessage(gptChatRequest: GPTChatRequest): ApiResponse<GPTChatResponse> {
-    return chatGptService.sendMessage(gptChatRequest)
-  }
+  override suspend fun sendMessage(gptChatRequest: GPTChatRequest): ApiResponse<GPTChatResponse> =
+    chatGptService.sendMessage(gptChatRequest)
 
   override fun watchIsChannelMessageEmpty(cid: String): Flow<Boolean> = flow {
-    val result = chatClient.channel(cid).watch().await()
-    result.onSuccessSuspend { channel ->
-      val messages = channel.messages
-      emit(messages.isEmpty())
+    chatClient.channel(cid).watch().await().onSuccessSuspend { channel ->
+      emit(channel.messages.isEmpty())
     }
   }.flowOn(ioDispatcher)
 }

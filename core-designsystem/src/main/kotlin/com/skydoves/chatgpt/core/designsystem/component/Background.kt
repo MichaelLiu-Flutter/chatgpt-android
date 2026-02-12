@@ -40,11 +40,20 @@ fun ChatGPTBackground(
   modifier: Modifier = Modifier,
   content: @Composable () -> Unit
 ) {
-  val color = LocalBackgroundTheme.current.color
-  val tonalElevation = LocalBackgroundTheme.current.tonalElevation
+  val backgroundTheme = LocalBackgroundTheme.current
+  val color = if (backgroundTheme.color == Color.Unspecified) {
+    Color.Transparent
+  } else {
+    backgroundTheme.color
+  }
+  val tonalElevation = if (backgroundTheme.tonalElevation == Dp.Unspecified) {
+    0.dp
+  } else {
+    backgroundTheme.tonalElevation
+  }
   Surface(
-    color = if (color == Color.Unspecified) Color.Transparent else color,
-    tonalElevation = if (tonalElevation == Dp.Unspecified) 0.dp else tonalElevation,
+    color = color,
+    tonalElevation = tonalElevation,
     modifier = modifier.fillMaxSize()
   ) {
     CompositionLocalProvider(LocalAbsoluteTonalElevation provides 0.dp) {
