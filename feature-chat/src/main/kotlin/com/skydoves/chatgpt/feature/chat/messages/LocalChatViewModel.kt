@@ -20,6 +20,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.skydoves.chatgpt.core.data.repository.GPTMessageRepository
 import com.skydoves.chatgpt.core.model.GPTMessage
+import com.skydoves.chatgpt.core.model.local.GPTConfig
 import com.skydoves.chatgpt.core.model.local.LocalChatMessage
 import com.skydoves.chatgpt.core.model.local.LocalChatSessionSummary
 import com.skydoves.chatgpt.core.model.local.LocalChatToolEvent
@@ -33,6 +34,7 @@ import com.skydoves.sandwich.getOrThrow
 import com.skydoves.sandwich.isSuccess
 import com.skydoves.sandwich.messageOrNull
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -57,6 +59,12 @@ class LocalChatViewModel @Inject constructor(
   private val _sending = MutableStateFlow(false)
   val sending: StateFlow<Boolean> = _sending.asStateFlow()
 
+  private val _gptConfigs = MutableStateFlow<List<GPTConfig>>(emptyList())
+  val gptConfigs: StateFlow<List<GPTConfig>> = _gptConfigs.asStateFlow()
+
+  private val _activeGptConfigId = MutableStateFlow<String?>(null)
+  val activeGptConfigId: StateFlow<String?> = _activeGptConfigId.asStateFlow()
+
   private val _activeSessionId = MutableStateFlow<String?>(null)
   val activeSessionId: StateFlow<String?> = _activeSessionId.asStateFlow()
 
@@ -64,6 +72,10 @@ class LocalChatViewModel @Inject constructor(
   private var pauseRequested: Boolean = false
 
   init {
+    viewModelScope.launch {
+      refreshGptConfigsInternal()
+    }
+
     viewModelScope.launch {
       val localSessions = repository.listLocalChatSessions()
       if (localSessions.isEmpty()) {
@@ -141,6 +153,54 @@ class LocalChatViewModel @Inject constructor(
     }
   }
 
+  fun addGptConfig(
+    name: String,
+    baseUrl: String,
+    apiKey: String
+  ) {
+    val normalizedName = name.trim()
+    val normalizedBaseUrl = baseUrl.trim()
+    val normalizedApiKey = apiKey.trim()
+    if (normalizedName.isBlank() || normalizedBaseUrl.isBlank() || normalizedApiKey.isBlank()) {
+      return
+    }
+
+    viewModelScope.launch {
+      val config = GPTConfig(
+        id = UUID.randomUUID().toString(),
+        name = normalizedName,
+        baseUrl = normalizedBaseUrl,
+        apiKey = normalizedApiKey
+      )
+      repository.upsertGptConfig(config)
+      repository.setActiveGptConfig(config.id)
+      refreshGptConfigsInternal()
+    }
+  }
+
+  fun setActiveGptConfig(configId: String) {
+    if (configId.isBlank()) return
+
+    viewModelScope.launch {
+      repository.setActiveGptConfig(configId)
+      refreshGptConfigsInternal()
+    }
+  }
+
+  fun deleteGptConfig(configId: String) {
+    if (configId.isBlank()) return
+
+    viewModelScope.launch {
+      val wasActive = _activeGptConfigId.value == configId
+      repository.deleteGptConfig(configId)
+      if (wasActive) {
+        val fallback = repository.listGptConfigs().firstOrNull { it.id != configId }
+        fallback?.let { repository.setActiveGptConfig(it.id) }
+      }
+      refreshGptConfigsInternal()
+    }
+  }
+
   fun pauseGenerating() {
     if (!_sending.value) return
     pauseRequested = true
@@ -178,6 +238,37 @@ class LocalChatViewModel @Inject constructor(
 
       if (latestSessions.none { it.id == currentSessionId }) {
         val fallbackSessionId = latestSessions.firstOrNull()?.id ?: return@launch
+        _activeSessionId.value = fallbackSessionId
+        _messages.value = repository.loadLocalChatSessionMessages(fallbackSessionId)
+      }
+    }
+  }
+
+  fun deleteSession(sessionId: String) {
+    if (sessionId.isBlank()) return
+
+    viewModelScope.launch {
+      val wasActiveSession = _activeSessionId.value == sessionId
+      if (wasActiveSession && _sending.value) {
+        pauseGenerating()
+        currentSendJob?.join()
+      }
+
+      repository.deleteLocalChatSession(sessionId)
+      val latestSessions = repository.listLocalChatSessions()
+
+      if (latestSessions.isEmpty()) {
+        val newSession = repository.createLocalChatSession()
+        _sessions.value = listOf(newSession)
+        _activeSessionId.value = newSession.id
+        _messages.value = emptyList()
+        return@launch
+      }
+
+      _sessions.value = latestSessions
+
+      if (wasActiveSession || latestSessions.none { it.id == _activeSessionId.value }) {
+        val fallbackSessionId = latestSessions.first().id
         _activeSessionId.value = fallbackSessionId
         _messages.value = repository.loadLocalChatSessionMessages(fallbackSessionId)
       }
@@ -500,6 +591,13 @@ class LocalChatViewModel @Inject constructor(
       fallback != null -> fallback
       else -> DEFAULT_REQUEST_ERROR_MESSAGE
     }
+  }
+
+  private suspend fun refreshGptConfigsInternal() {
+    val configs = repository.listGptConfigs()
+    val activeConfig = repository.getActiveGptConfig()
+    _gptConfigs.value = configs
+    _activeGptConfigId.value = activeConfig.id
   }
 
   private companion object {

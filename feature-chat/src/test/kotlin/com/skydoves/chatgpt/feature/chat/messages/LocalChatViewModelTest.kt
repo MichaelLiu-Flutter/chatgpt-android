@@ -2,6 +2,7 @@ package com.skydoves.chatgpt.feature.chat.messages
 
 import com.skydoves.chatgpt.core.data.repository.GPTMessageRepository
 import com.skydoves.chatgpt.core.model.GPTMessage
+import com.skydoves.chatgpt.core.model.local.GPTConfig
 import com.skydoves.chatgpt.core.model.local.LocalChatMessage
 import com.skydoves.chatgpt.core.model.local.LocalChatSessionSummary
 import com.skydoves.chatgpt.core.model.network.GPTChatRequest
@@ -308,6 +309,13 @@ class LocalChatViewModelTest {
     private val responses: ArrayDeque<ApiResponse<GPTChatResponse>>,
   ) : GPTMessageRepository {
     private var sessionMessages: List<LocalChatMessage> = emptyList()
+    private val defaultConfig = GPTConfig(
+      id = "default",
+      name = "Default",
+      baseUrl = "",
+      apiKey = "",
+      isDefault = true
+    )
     val requests = mutableListOf<GPTChatRequest>()
 
     override suspend fun sendMessage(gptChatRequest: GPTChatRequest): ApiResponse<GPTChatResponse> {
@@ -315,6 +323,16 @@ class LocalChatViewModelTest {
       return responses.removeFirstOrNull()
         ?: throw AssertionError("No queued response left for sendMessage")
     }
+
+    override suspend fun listGptConfigs(): List<GPTConfig> = listOf(defaultConfig)
+
+    override suspend fun getActiveGptConfig(): GPTConfig = defaultConfig
+
+    override suspend fun setActiveGptConfig(configId: String) = Unit
+
+    override suspend fun upsertGptConfig(config: GPTConfig) = Unit
+
+    override suspend fun deleteGptConfig(configId: String) = Unit
 
     override suspend fun listLocalChatSessions(): List<LocalChatSessionSummary> = listOf(
       LocalChatSessionSummary(
@@ -325,6 +343,12 @@ class LocalChatViewModelTest {
         messageCount = sessionMessages.size
       )
     )
+
+    override suspend fun deleteLocalChatSession(sessionId: String) {
+      if (sessionId == SESSION_ID) {
+        sessionMessages = emptyList()
+      }
+    }
 
     override suspend fun createLocalChatSession(): LocalChatSessionSummary = LocalChatSessionSummary(
       id = SESSION_ID,
@@ -356,6 +380,13 @@ class LocalChatViewModelTest {
 
   private class SuspendedRepository : GPTMessageRepository {
     private var sessionMessages: List<LocalChatMessage> = emptyList()
+    private val defaultConfig = GPTConfig(
+      id = "default",
+      name = "Default",
+      baseUrl = "",
+      apiKey = "",
+      isDefault = true
+    )
     val requests = mutableListOf<GPTChatRequest>()
     val response = CompletableDeferred<ApiResponse<GPTChatResponse>>()
 
@@ -363,6 +394,16 @@ class LocalChatViewModelTest {
       requests += gptChatRequest
       return response.await()
     }
+
+    override suspend fun listGptConfigs(): List<GPTConfig> = listOf(defaultConfig)
+
+    override suspend fun getActiveGptConfig(): GPTConfig = defaultConfig
+
+    override suspend fun setActiveGptConfig(configId: String) = Unit
+
+    override suspend fun upsertGptConfig(config: GPTConfig) = Unit
+
+    override suspend fun deleteGptConfig(configId: String) = Unit
 
     override suspend fun listLocalChatSessions(): List<LocalChatSessionSummary> = listOf(
       LocalChatSessionSummary(
@@ -373,6 +414,12 @@ class LocalChatViewModelTest {
         messageCount = sessionMessages.size
       )
     )
+
+    override suspend fun deleteLocalChatSession(sessionId: String) {
+      if (sessionId == SESSION_ID) {
+        sessionMessages = emptyList()
+      }
+    }
 
     override suspend fun createLocalChatSession(): LocalChatSessionSummary = LocalChatSessionSummary(
       id = SESSION_ID,

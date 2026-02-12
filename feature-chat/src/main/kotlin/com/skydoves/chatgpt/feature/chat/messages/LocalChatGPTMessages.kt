@@ -24,6 +24,7 @@ import android.widget.TextView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -41,11 +43,17 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -65,10 +73,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.skydoves.chatgpt.core.model.local.GPTConfig
 import com.skydoves.chatgpt.core.model.local.LocalChatMessage
 import com.skydoves.chatgpt.feature.chat.R
 import com.skydoves.chatgpt.feature.chat.theme.ChatGPTStreamTheme
@@ -84,10 +94,13 @@ fun LocalChatGPTMessages(
 ) {
   val messages by viewModel.messages.collectAsStateWithLifecycle()
   val sending by viewModel.sending.collectAsStateWithLifecycle()
+  val gptConfigs by viewModel.gptConfigs.collectAsStateWithLifecycle()
+  val activeGptConfigId by viewModel.activeGptConfigId.collectAsStateWithLifecycle()
   val listState = rememberLazyListState()
   val emptyResponse = stringResource(id = R.string.local_mode_empty_response)
 
   var input by rememberSaveable { mutableStateOf("") }
+  var showConfigSheet by rememberSaveable { mutableStateOf(false) }
 
   fun onSendMessage() {
     if (input.isBlank() || sending) return
@@ -95,7 +108,7 @@ fun LocalChatGPTMessages(
     input = ""
   }
 
-  LaunchedEffect(sessionId) {
+  LaunchedEffect(viewModel, sessionId) {
     sessionId?.let(viewModel::loadSession)
   }
 
@@ -120,7 +133,11 @@ fun LocalChatGPTMessages(
         .background(backgroundBrush)
     ) {
       Column(modifier = Modifier.fillMaxSize()) {
-        LocalChatHeader(onBackPressed = onBackPressed)
+        LocalChatHeader(
+          onBackPressed = onBackPressed,
+          activeConfigName = gptConfigs.firstOrNull { it.id == activeGptConfigId }?.name,
+          onManageConfigClick = { showConfigSheet = true }
+        )
 
         if (messages.isEmpty()) {
           LocalChatEmptyState(
@@ -161,12 +178,31 @@ fun LocalChatGPTMessages(
         )
       }
     }
+
+    if (showConfigSheet) {
+      GPTConfigManagementBottomSheet(
+        configs = gptConfigs,
+        activeConfigId = activeGptConfigId,
+        onDismissRequest = { showConfigSheet = false },
+        onSelectConfig = viewModel::setActiveGptConfig,
+        onDeleteConfig = viewModel::deleteGptConfig,
+        onAddConfig = { name, baseUrl, apiKey ->
+          viewModel.addGptConfig(
+            name = name,
+            baseUrl = baseUrl,
+            apiKey = apiKey
+          )
+        }
+      )
+    }
   }
 }
 
 @Composable
 private fun LocalChatHeader(
-  onBackPressed: () -> Unit
+  onBackPressed: () -> Unit,
+  activeConfigName: String?,
+  onManageConfigClick: () -> Unit
 ) {
   Surface(
     modifier = Modifier.fillMaxWidth(),
@@ -185,10 +221,178 @@ private fun LocalChatHeader(
           contentDescription = stringResource(id = R.string.local_mode_back)
         )
       }
+      Column(modifier = Modifier.weight(1f)) {
+        Text(
+          text = stringResource(id = R.string.local_mode_title),
+          style = MaterialTheme.typography.titleMedium
+        )
+        Text(
+          text = stringResource(
+            id = R.string.local_mode_config_current,
+            activeConfigName?.ifBlank { stringResource(id = R.string.local_mode_config_unknown) }
+              ?: stringResource(id = R.string.local_mode_config_unknown)
+          ),
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+      }
+      IconButton(onClick = onManageConfigClick) {
+        Icon(
+          imageVector = Icons.Filled.Settings,
+          contentDescription = stringResource(id = R.string.local_mode_manage_configs)
+        )
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GPTConfigManagementBottomSheet(
+  configs: List<GPTConfig>,
+  activeConfigId: String?,
+  onDismissRequest: () -> Unit,
+  onSelectConfig: (String) -> Unit,
+  onDeleteConfig: (String) -> Unit,
+  onAddConfig: (String, String, String) -> Unit
+) {
+  var name by rememberSaveable { mutableStateOf("") }
+  var baseUrl by rememberSaveable { mutableStateOf("") }
+  var apiKey by rememberSaveable { mutableStateOf("") }
+
+  val canAdd = name.isNotBlank() && baseUrl.isNotBlank() && apiKey.isNotBlank()
+
+  ModalBottomSheet(onDismissRequest = onDismissRequest) {
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp),
+      verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
       Text(
-        text = stringResource(id = R.string.local_mode_title),
+        text = stringResource(id = R.string.local_mode_config_sheet_title),
         style = MaterialTheme.typography.titleMedium
       )
+
+      if (configs.isEmpty()) {
+        Text(
+          text = stringResource(id = R.string.local_mode_config_empty),
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+      } else {
+        configs.forEachIndexed { index, config ->
+          GPTConfigItem(
+            config = config,
+            isActive = config.id == activeConfigId,
+            onSelect = { onSelectConfig(config.id) },
+            onDelete = {
+              if (!config.isDefault) {
+                onDeleteConfig(config.id)
+              }
+            }
+          )
+          if (index != configs.lastIndex) {
+            HorizontalDivider()
+          }
+        }
+      }
+
+      HorizontalDivider()
+
+      Text(
+        text = stringResource(id = R.string.local_mode_config_add_title),
+        style = MaterialTheme.typography.titleSmall
+      )
+
+      OutlinedTextField(
+        modifier = Modifier.fillMaxWidth(),
+        value = name,
+        onValueChange = { name = it },
+        singleLine = true,
+        label = { Text(text = stringResource(id = R.string.local_mode_config_name)) }
+      )
+
+      OutlinedTextField(
+        modifier = Modifier.fillMaxWidth(),
+        value = baseUrl,
+        onValueChange = { baseUrl = it },
+        singleLine = true,
+        label = { Text(text = stringResource(id = R.string.local_mode_config_base_url)) }
+      )
+
+      OutlinedTextField(
+        modifier = Modifier.fillMaxWidth(),
+        value = apiKey,
+        onValueChange = { apiKey = it },
+        singleLine = true,
+        label = { Text(text = stringResource(id = R.string.local_mode_config_api_key)) }
+      )
+
+      Button(
+        modifier = Modifier.fillMaxWidth(),
+        enabled = canAdd,
+        onClick = {
+          onAddConfig(name.trim(), baseUrl.trim(), apiKey.trim())
+          name = ""
+          baseUrl = ""
+          apiKey = ""
+        }
+      ) {
+        Text(text = stringResource(id = R.string.local_mode_config_add_action))
+      }
+
+      Box(modifier = Modifier.size(8.dp))
+    }
+  }
+}
+
+@Composable
+private fun GPTConfigItem(
+  config: GPTConfig,
+  isActive: Boolean,
+  onSelect: () -> Unit,
+  onDelete: () -> Unit
+) {
+  Row(
+    modifier = Modifier
+      .fillMaxWidth()
+      .clickable(onClick = onSelect)
+      .padding(vertical = 6.dp),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(8.dp)
+  ) {
+    RadioButton(
+      selected = isActive,
+      onClick = onSelect
+    )
+    Column(modifier = Modifier.weight(1f)) {
+      Text(
+        text = config.name,
+        style = MaterialTheme.typography.bodyMedium
+      )
+      Text(
+        text = config.baseUrl,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+      )
+      if (isActive) {
+        Text(
+          text = stringResource(id = R.string.local_mode_config_active),
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.primary
+        )
+      }
+    }
+    if (!config.isDefault) {
+      IconButton(onClick = onDelete) {
+        Icon(
+          imageVector = Icons.Filled.Delete,
+          contentDescription = stringResource(id = R.string.local_mode_config_delete)
+        )
+      }
     }
   }
 }

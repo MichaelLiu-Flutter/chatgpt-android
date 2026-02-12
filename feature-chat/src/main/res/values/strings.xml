@@ -25,6 +25,7 @@
   <string name="local_mode_open_chat">Open chat</string>
   <string name="local_mode_back">Back</string>
   <string name="local_mode_new_chat">New chat</string>
+  <string name="local_mode_delete_chat">Delete chat</string>
   <string name="local_mode_pause">Pause</string>
   <string name="local_mode_subtitle_ready">%1$d messages in this chat</string>
   <string name="local_mode_subtitle_sending">Assistant is thinking...</string>
@@ -35,6 +36,18 @@
   <string name="local_mode_assistant_label">Assistant</string>
   <string name="local_mode_input_placeholder">Type a message</string>
   <string name="local_mode_send">Send</string>
+  <string name="local_mode_manage_configs">Manage GPT configs</string>
+  <string name="local_mode_config_current">Config: %1$s</string>
+  <string name="local_mode_config_unknown">Unknown</string>
+  <string name="local_mode_config_sheet_title">GPT Configurations</string>
+  <string name="local_mode_config_empty">No GPT configurations yet.</string>
+  <string name="local_mode_config_add_title">Add configuration</string>
+  <string name="local_mode_config_name">Name</string>
+  <string name="local_mode_config_base_url">Base URL</string>
+  <string name="local_mode_config_api_key">API Key</string>
+  <string name="local_mode_config_add_action">Add and switch</string>
+  <string name="local_mode_config_active">Active</string>
+  <string name="local_mode_config_delete">Delete configuration</string>
   <string name="local_mode_reasoning_title">思考过程</string>
   <string name="local_mode_reasoning_show">展开思考过程</string>
   <string name="local_mode_reasoning_hide">收起思考过程</string>

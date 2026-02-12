@@ -17,12 +17,15 @@
 package com.skydoves.chatgpt.core.data.repository
 
 import androidx.core.content.edit
+import com.skydoves.chatgpt.core.model.local.GPTConfig
+import com.skydoves.chatgpt.core.model.local.GPTConfigPreferencesKeys
 import com.skydoves.chatgpt.core.model.local.LocalChatMessage
 import com.skydoves.chatgpt.core.model.local.LocalChatSessionSummary
 import com.skydoves.chatgpt.core.model.local.LocalChatToolEvent
 import com.skydoves.chatgpt.core.model.network.GPTChatRequest
 import com.skydoves.chatgpt.core.model.network.GPTChatResponse
 import com.skydoves.chatgpt.core.model.network.GPTResponseStreamEvent
+import com.skydoves.chatgpt.core.network.BuildConfig as NetworkBuildConfig
 import com.skydoves.chatgpt.core.network.ChatGPTDispatchers
 import com.skydoves.chatgpt.core.network.Dispatcher
 import com.skydoves.chatgpt.core.network.service.ChatGPTService
@@ -48,6 +51,7 @@ internal class GPTMessageRepositoryImpl @Inject constructor(
   private val preferences: Preferences
 ) : GPTMessageRepository {
 
+  private val gptConfigLock = Any()
   private val localSessionLock = Any()
 
   override suspend fun sendMessage(gptChatRequest: GPTChatRequest): ApiResponse<GPTChatResponse> =
@@ -134,9 +138,85 @@ internal class GPTMessageRepositoryImpl @Inject constructor(
     }
   }.flowOn(ioDispatcher)
 
+  override suspend fun listGptConfigs(): List<GPTConfig> = withContext(ioDispatcher) {
+    synchronized(gptConfigLock) {
+      loadGptConfigsLocked()
+    }
+  }
+
+  override suspend fun getActiveGptConfig(): GPTConfig = withContext(ioDispatcher) {
+    synchronized(gptConfigLock) {
+      val configs = loadGptConfigsLocked()
+      val activeConfig = resolveActiveGptConfigLocked(configs)
+      persistActiveGptConfigLocked(activeConfig)
+      activeConfig
+    }
+  }
+
+  override suspend fun setActiveGptConfig(configId: String) = withContext(ioDispatcher) {
+    synchronized(gptConfigLock) {
+      val configs = loadGptConfigsLocked()
+      val target = configs.firstOrNull { it.id == configId } ?: defaultGptConfig()
+      persistActiveGptConfigLocked(target)
+    }
+  }
+
+  override suspend fun upsertGptConfig(config: GPTConfig) = withContext(ioDispatcher) {
+    synchronized(gptConfigLock) {
+      if (config.id == GPTConfigPreferencesKeys.DEFAULT_CONFIG_ID || config.isDefault) {
+        persistActiveGptConfigLocked(defaultGptConfig())
+        return@withContext
+      }
+
+      val customConfig = config.normalizeCustomConfig()
+      val current = loadGptConfigsLocked()
+      val updated = buildList {
+        addAll(current.filterNot { it.id == customConfig.id || it.isDefault })
+        add(customConfig)
+      }.sortedBy { it.name.lowercase() }
+
+      saveCustomGptConfigsLocked(updated)
+
+      val activeConfigId = preferences.sharedPreferences
+        .getString(GPTConfigPreferencesKeys.KEY_ACTIVE_GPT_CONFIG_ID, null)
+      if (activeConfigId == customConfig.id) {
+        persistActiveGptConfigLocked(customConfig)
+      } else if (activeConfigId.isNullOrBlank()) {
+        persistActiveGptConfigLocked(defaultGptConfig())
+      }
+    }
+  }
+
+  override suspend fun deleteGptConfig(configId: String) = withContext(ioDispatcher) {
+    synchronized(gptConfigLock) {
+      if (configId.isBlank() || configId == GPTConfigPreferencesKeys.DEFAULT_CONFIG_ID) {
+        return@withContext
+      }
+
+      val current = loadGptConfigsLocked()
+      val updated = current.filterNot { it.id == configId || it.isDefault }
+      saveCustomGptConfigsLocked(updated)
+
+      val activeConfig = resolveActiveGptConfigLocked(loadGptConfigsLocked())
+      persistActiveGptConfigLocked(activeConfig)
+    }
+  }
+
   override suspend fun listLocalChatSessions(): List<LocalChatSessionSummary> = withContext(ioDispatcher) {
     synchronized(localSessionLock) {
       loadLocalSessionSummariesLocked()
+    }
+  }
+
+  override suspend fun deleteLocalChatSession(sessionId: String) = withContext(ioDispatcher) {
+    synchronized(localSessionLock) {
+      if (sessionId.isBlank()) return@withContext
+
+      val updated = loadLocalSessionSummariesLocked().filterNot { it.id == sessionId }
+      saveLocalSessionSummariesLocked(updated)
+      preferences.sharedPreferences.edit {
+        remove(localSessionMessagesKey(sessionId))
+      }
     }
   }
 
@@ -202,6 +282,87 @@ internal class GPTMessageRepositoryImpl @Inject constructor(
       emit(channel.messages.isEmpty())
     }
   }.flowOn(ioDispatcher)
+
+  private fun loadGptConfigsLocked(): List<GPTConfig> {
+    val defaultConfig = defaultGptConfig()
+    val payload = preferences.sharedPreferences
+      .getString(GPTConfigPreferencesKeys.KEY_GPT_CONFIGS, null)
+      .orEmpty()
+    if (payload.isBlank()) {
+      return listOf(defaultConfig)
+    }
+
+    val array = runCatching { JSONArray(payload) }.getOrElse { return listOf(defaultConfig) }
+    val customConfigs = buildList {
+      repeat(array.length()) { index ->
+        val item = array.optJSONObject(index) ?: return@repeat
+        val id = item.optNullableString(JSON_KEY_ID) ?: return@repeat
+        val name = item.optNullableString(JSON_KEY_NAME) ?: return@repeat
+        add(
+          GPTConfig(
+            id = id,
+            name = name,
+            baseUrl = item.optRawString(JSON_KEY_BASE_URL).orEmpty(),
+            apiKey = item.optRawString(JSON_KEY_API_KEY).orEmpty(),
+            isDefault = false
+          )
+        )
+      }
+    }.distinctBy { it.id }
+
+    return listOf(defaultConfig) + customConfigs
+  }
+
+  private fun saveCustomGptConfigsLocked(configs: List<GPTConfig>) {
+    val array = JSONArray()
+    configs
+      .filterNot { it.isDefault || it.id == GPTConfigPreferencesKeys.DEFAULT_CONFIG_ID }
+      .forEach { config ->
+        array.put(
+          JSONObject()
+            .put(JSON_KEY_ID, config.id)
+            .put(JSON_KEY_NAME, config.name)
+            .put(JSON_KEY_BASE_URL, config.baseUrl)
+            .put(JSON_KEY_API_KEY, config.apiKey)
+        )
+      }
+
+    preferences.sharedPreferences.edit {
+      putString(GPTConfigPreferencesKeys.KEY_GPT_CONFIGS, array.toString())
+    }
+  }
+
+  private fun resolveActiveGptConfigLocked(configs: List<GPTConfig>): GPTConfig {
+    val activeConfigId = preferences.sharedPreferences
+      .getString(GPTConfigPreferencesKeys.KEY_ACTIVE_GPT_CONFIG_ID, null)
+      .orEmpty()
+
+    return configs.firstOrNull { it.id == activeConfigId } ?: defaultGptConfig()
+  }
+
+  private fun persistActiveGptConfigLocked(config: GPTConfig) {
+    preferences.sharedPreferences.edit {
+      putString(GPTConfigPreferencesKeys.KEY_ACTIVE_GPT_CONFIG_ID, config.id)
+      putString(GPTConfigPreferencesKeys.KEY_ACTIVE_GPT_BASE_URL, config.baseUrl)
+      putString(GPTConfigPreferencesKeys.KEY_ACTIVE_GPT_API_KEY, config.apiKey)
+    }
+  }
+
+  private fun defaultGptConfig(): GPTConfig = GPTConfig(
+    id = GPTConfigPreferencesKeys.DEFAULT_CONFIG_ID,
+    name = GPTConfigPreferencesKeys.DEFAULT_CONFIG_NAME,
+    baseUrl = NetworkBuildConfig.GPT_BASE_URL,
+    apiKey = NetworkBuildConfig.GPT_API_KEY,
+    isDefault = true
+  )
+
+  private fun GPTConfig.normalizeCustomConfig(): GPTConfig = copy(
+    id = id.trim().ifBlank { UUID.randomUUID().toString() },
+    name = name.trim().ifBlank { DEFAULT_CUSTOM_CONFIG_NAME },
+    baseUrl = baseUrl.trim(),
+    apiKey = apiKey.trim(),
+    isDefault = false
+  )
 
   private fun loadLocalSessionSummariesLocked(): List<LocalChatSessionSummary> {
     val payload = preferences.sharedPreferences.getString(KEY_LOCAL_CHAT_SESSIONS, null).orEmpty()
@@ -351,6 +512,9 @@ internal class GPTMessageRepositoryImpl @Inject constructor(
     private const val KEY_LOCAL_CHAT_MESSAGES_PREFIX = "key_local_chat_messages_"
 
     private const val JSON_KEY_ID = "id"
+    private const val JSON_KEY_NAME = "name"
+    private const val JSON_KEY_BASE_URL = "baseUrl"
+    private const val JSON_KEY_API_KEY = "apiKey"
     private const val JSON_KEY_TITLE = "title"
     private const val JSON_KEY_PREVIEW = "preview"
     private const val JSON_KEY_UPDATED_AT = "updatedAt"
@@ -371,6 +535,7 @@ internal class GPTMessageRepositoryImpl @Inject constructor(
     private const val USER_ROLE = "user"
 
     private const val DEFAULT_LOCAL_SESSION_TITLE = "New Chat"
+    private const val DEFAULT_CUSTOM_CONFIG_NAME = "Custom"
     private const val MAX_SESSION_TITLE_LENGTH = 60
     private const val MAX_PREVIEW_LENGTH = 80
   }

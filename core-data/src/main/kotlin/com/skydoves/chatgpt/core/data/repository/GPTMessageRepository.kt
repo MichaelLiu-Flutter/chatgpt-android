@@ -17,6 +17,7 @@
 package com.skydoves.chatgpt.core.data.repository
 
 import com.skydoves.chatgpt.core.model.local.LocalChatMessage
+import com.skydoves.chatgpt.core.model.local.GPTConfig
 import com.skydoves.chatgpt.core.model.local.LocalChatSessionSummary
 import com.skydoves.chatgpt.core.model.network.GPTChatRequest
 import com.skydoves.chatgpt.core.model.network.GPTChatResponse
@@ -31,7 +32,19 @@ interface GPTMessageRepository {
 
   fun sendMessageStream(gptChatRequest: GPTChatRequest): Flow<GPTResponseStreamEvent> = emptyFlow()
 
+  suspend fun listGptConfigs(): List<GPTConfig>
+
+  suspend fun getActiveGptConfig(): GPTConfig
+
+  suspend fun setActiveGptConfig(configId: String)
+
+  suspend fun upsertGptConfig(config: GPTConfig)
+
+  suspend fun deleteGptConfig(configId: String)
+
   suspend fun listLocalChatSessions(): List<LocalChatSessionSummary>
+
+  suspend fun deleteLocalChatSession(sessionId: String)
 
   suspend fun createLocalChatSession(): LocalChatSessionSummary
 

@@ -35,13 +35,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddComment
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -176,7 +181,7 @@ fun ChatGPTChannels(
                 items = localSessions,
                 key = LocalChatSessionSummary::id
               ) { session ->
-                LocalSessionItem(
+                DismissibleLocalSessionItem(
                   session = session,
                   onClick = {
                     composeNavigator.navigate(
@@ -184,6 +189,9 @@ fun ChatGPTChannels(
                         ChatGPTScreens.createLocalSessionRoute(session.id)
                       )
                     )
+                  },
+                  onDelete = {
+                    localChatViewModel.deleteSession(session.id)
                   }
                 )
               }
@@ -265,6 +273,48 @@ fun ChatGPTChannels(
         ChatGPTLoadingIndicator()
       }
     }
+  }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun DismissibleLocalSessionItem(
+  session: LocalChatSessionSummary,
+  onClick: () -> Unit,
+  onDelete: () -> Unit
+) {
+  val dismissState = rememberSwipeToDismissBoxState(
+    confirmValueChange = { value ->
+      if (value == SwipeToDismissBoxValue.EndToStart) {
+        onDelete()
+      }
+      value == SwipeToDismissBoxValue.Settled
+    }
+  )
+
+  SwipeToDismissBox(
+    state = dismissState,
+    enableDismissFromStartToEnd = false,
+    enableDismissFromEndToStart = true,
+    backgroundContent = {
+      Box(
+        modifier = Modifier
+          .fillMaxSize()
+          .padding(horizontal = 20.dp),
+        contentAlignment = Alignment.CenterEnd
+      ) {
+        Icon(
+          imageVector = Icons.Filled.Delete,
+          contentDescription = stringResource(id = R.string.local_mode_delete_chat),
+          tint = MaterialTheme.colorScheme.error
+        )
+      }
+    }
+  ) {
+    LocalSessionItem(
+      session = session,
+      onClick = onClick
+    )
   }
 }
 

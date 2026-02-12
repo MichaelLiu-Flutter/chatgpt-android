@@ -47,8 +47,9 @@ sealed class ChatGPTScreens(
     private const val local_channel_session_separator = ":"
 
     fun isLocalChannel(channelId: String): Boolean {
-      return channelId == local_channel_id ||
-        channelId.startsWith("$local_channel_id$local_channel_session_separator")
+      if (!channelId.startsWith(local_channel_id)) return false
+      val suffix = channelId.removePrefix(local_channel_id)
+      return suffix.isBlank() || suffix.firstOrNull()?.isLetterOrDigit() != true
     }
 
     fun createLocalSessionRoute(sessionId: String): String {
@@ -56,8 +57,10 @@ sealed class ChatGPTScreens(
     }
 
     fun localSessionIdOrNull(channelId: String): String? {
-      if (!channelId.startsWith("$local_channel_id$local_channel_session_separator")) return null
-      return channelId.substringAfter(local_channel_session_separator).takeIf(String::isNotBlank)
+      if (!channelId.startsWith(local_channel_id)) return null
+      val suffix = channelId.removePrefix(local_channel_id)
+      if (suffix.isBlank() || suffix.firstOrNull()?.isLetterOrDigit() == true) return null
+      return suffix.dropWhile { !it.isLetterOrDigit() }.takeIf(String::isNotBlank)
     }
   }
 }

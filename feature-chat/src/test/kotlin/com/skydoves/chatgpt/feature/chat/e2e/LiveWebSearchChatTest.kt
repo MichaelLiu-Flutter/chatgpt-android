@@ -2,7 +2,6 @@ package com.skydoves.chatgpt.feature.chat.e2e
 
 import com.skydoves.chatgpt.core.model.GPTMessage
 import com.skydoves.chatgpt.core.model.network.GPTChatRequest
-import com.skydoves.chatgpt.core.network.GPTInterceptor
 import com.skydoves.chatgpt.core.network.BuildConfig as NetworkBuildConfig
 import com.skydoves.chatgpt.core.network.service.ChatGPTService
 import com.skydoves.chatgpt.feature.chat.BuildConfig as FeatureBuildConfig
@@ -46,7 +45,12 @@ class LiveWebSearchChatTest {
 
     // Avoid HTTP logging in tests to prevent leaking secrets to stdout.
     val okHttpClient = OkHttpClient.Builder()
-      .addInterceptor(GPTInterceptor())
+      .addInterceptor { chain ->
+        val request = chain.request().newBuilder()
+          .header("Authorization", "Bearer ${NetworkBuildConfig.GPT_API_KEY}")
+          .build()
+        chain.proceed(request)
+      }
       .connectTimeout(30, TimeUnit.SECONDS)
       .readTimeout(90, TimeUnit.SECONDS)
       .writeTimeout(90, TimeUnit.SECONDS)
@@ -81,4 +85,3 @@ class LiveWebSearchChatTest {
     assertTrue("Expected android developers domain in response. Got: `$text`", text.contains("developer.android.com"))
   }
 }
-

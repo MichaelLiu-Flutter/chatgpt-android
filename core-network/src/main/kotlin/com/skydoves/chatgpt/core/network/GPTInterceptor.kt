@@ -16,17 +16,64 @@
 
 package com.skydoves.chatgpt.core.network
 
+import com.skydoves.chatgpt.core.model.local.GPTConfigPreferencesKeys
+import com.skydoves.chatgpt.core.preferences.Preferences
 import javax.inject.Inject
 import okhttp3.Interceptor
 import okhttp3.Response
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
-class GPTInterceptor @Inject constructor() : Interceptor {
+class GPTInterceptor @Inject constructor(
+  private val preferences: Preferences
+) : Interceptor {
 
   override fun intercept(chain: Interceptor.Chain): Response {
     val request = chain.request()
-      .newBuilder()
-      .addHeader("Authorization", "Bearer ${BuildConfig.GPT_API_KEY}")
+    val sharedPreferences = preferences.sharedPreferences
+
+    val rawBaseUrl = sharedPreferences
+      .getString(GPTConfigPreferencesKeys.KEY_ACTIVE_GPT_BASE_URL, null)
+      .orEmpty()
+    val rawApiKey = sharedPreferences
+      .getString(GPTConfigPreferencesKeys.KEY_ACTIVE_GPT_API_KEY, null)
+      .orEmpty()
+
+    val activeBaseUrl = normalizeApiBaseUrl(
+      baseUrl = rawBaseUrl,
+      fallback = BuildConfig.GPT_BASE_URL.ifBlank { DEFAULT_OPENAI_BASE_URL }
+    )
+    val activeApiKey = rawApiKey.ifBlank { BuildConfig.GPT_API_KEY }.trim()
+
+    val routedUrl = request.url.newBuilder()
+      .scheme(activeBaseUrl.scheme)
+      .host(activeBaseUrl.host)
+      .port(activeBaseUrl.port)
+      .encodedPath(activeBaseUrl.resolve("responses")?.encodedPath ?: request.url.encodedPath)
       .build()
-    return chain.proceed(request)
+
+    val builder = request.newBuilder().url(routedUrl)
+    if (activeApiKey.isNotEmpty()) {
+      builder.header("Authorization", "Bearer $activeApiKey")
+    }
+    return chain.proceed(builder.build())
+  }
+
+  private fun normalizeApiBaseUrl(baseUrl: String, fallback: String): okhttp3.HttpUrl {
+    val candidate = baseUrl.trim().ifBlank { fallback }
+    val candidateWithTrailingSlash = if (candidate.endsWith('/')) candidate else "$candidate/"
+    val withApiVersion = if (candidateWithTrailingSlash.endsWith("v1/")) {
+      candidateWithTrailingSlash
+    } else {
+      "${candidateWithTrailingSlash}v1/"
+    }
+
+    return withApiVersion.toHttpUrlOrNull()
+      ?: DEFAULT_OPENAI_API_BASE_URL.toHttpUrl()
+  }
+
+  private companion object {
+    private const val DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/"
+    private const val DEFAULT_OPENAI_API_BASE_URL = "https://api.openai.com/v1/"
   }
 }

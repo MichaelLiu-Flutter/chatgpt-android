@@ -41,9 +41,11 @@ internal object NetworkModule {
 
   @Provides
   @Singleton
-  fun provideOkHttpClient(): OkHttpClient {
+  fun provideOkHttpClient(
+    gptInterceptor: GPTInterceptor
+  ): OkHttpClient {
     return OkHttpClient.Builder()
-      .addInterceptor(GPTInterceptor())
+      .addInterceptor(gptInterceptor)
       .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
       // 0 means no timeout limit for read/write/call.
       .readTimeout(0, TimeUnit.SECONDS)
