@@ -16,6 +16,7 @@
 
 package com.skydoves.chatgpt.core.network
 
+import android.os.Build
 import com.skydoves.chatgpt.core.model.local.GPTConfigPreferencesKeys
 import com.skydoves.chatgpt.core.preferences.Preferences
 import javax.inject.Inject
@@ -44,6 +45,19 @@ class GPTInterceptor @Inject constructor(
       fallback = BuildConfig.GPT_BASE_URL.ifBlank { DEFAULT_OPENAI_BASE_URL }
     )
     val activeApiKey = rawApiKey.ifBlank { BuildConfig.GPT_API_KEY }.trim()
+    val configuredOriginator = normalizeOptionalHeaderValue(BuildConfig.GPT_CLIENT_ORIGINATOR)
+      .ifBlank { DEFAULT_CODEX_ORIGINATOR }
+    val configuredVersion = normalizeOptionalHeaderValue(BuildConfig.GPT_CLIENT_VERSION)
+      .ifBlank { DEFAULT_CLIENT_VERSION }
+    val configuredUserAgent = normalizeOptionalHeaderValue(BuildConfig.GPT_CLIENT_USER_AGENT)
+      .ifBlank {
+        buildCodexLikeUserAgent(
+          originator = configuredOriginator,
+          version = configuredVersion
+        )
+      }
+    val configuredReferer = normalizeOptionalHeaderValue(BuildConfig.GPT_CLIENT_REFERER)
+    val configuredAppName = normalizeOptionalHeaderValue(BuildConfig.GPT_CLIENT_APP_NAME)
 
     val routedUrl = request.url.newBuilder()
       .scheme(activeBaseUrl.scheme)
@@ -56,24 +70,60 @@ class GPTInterceptor @Inject constructor(
     if (activeApiKey.isNotEmpty()) {
       builder.header("Authorization", "Bearer $activeApiKey")
     }
+    if (configuredOriginator.isNotEmpty()) {
+      builder.header("originator", configuredOriginator)
+    }
+    if (configuredVersion.isNotEmpty()) {
+      builder.header("version", configuredVersion)
+    }
+    if (configuredUserAgent.isNotEmpty()) {
+      builder.header("User-Agent", configuredUserAgent)
+    }
+    if (configuredReferer.isNotEmpty()) {
+      builder.header("HTTP-Referer", configuredReferer)
+    }
+    if (configuredAppName.isNotEmpty()) {
+      builder.header("X-Title", configuredAppName)
+    }
     return chain.proceed(builder.build())
   }
 
   private fun normalizeApiBaseUrl(baseUrl: String, fallback: String): okhttp3.HttpUrl {
     val candidate = baseUrl.trim().ifBlank { fallback }
     val candidateWithTrailingSlash = if (candidate.endsWith('/')) candidate else "$candidate/"
-    val withApiVersion = if (candidateWithTrailingSlash.endsWith("v1/")) {
-      candidateWithTrailingSlash
-    } else {
-      "${candidateWithTrailingSlash}v1/"
-    }
-
-    return withApiVersion.toHttpUrlOrNull()
+    return candidateWithTrailingSlash.toHttpUrlOrNull()
       ?: DEFAULT_OPENAI_API_BASE_URL.toHttpUrl()
+  }
+
+  private fun normalizeOptionalHeaderValue(raw: String): String {
+    val normalized = raw.trim()
+    return if (normalized.equals("unset", ignoreCase = true) || normalized == "-") {
+      ""
+    } else {
+      normalized
+    }
+  }
+
+  private fun buildCodexLikeUserAgent(originator: String, version: String): String {
+    val release = Build.VERSION.RELEASE?.trim().orEmpty().ifBlank { "unknown" }
+    val model = Build.MODEL?.trim().orEmpty().ifBlank { "android" }
+    val candidate = "$originator/$version (Android $release; $model)"
+    return sanitizeHeaderValue(candidate)
+  }
+
+  private fun sanitizeHeaderValue(candidate: String): String {
+    if (candidate.isBlank()) return ""
+    return buildString(candidate.length) {
+      candidate.forEach { ch ->
+        append(if (ch in ' '..'~') ch else '_')
+      }
+    }.trim()
   }
 
   private companion object {
     private const val DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/"
     private const val DEFAULT_OPENAI_API_BASE_URL = "https://api.openai.com/v1/"
+    private const val DEFAULT_CODEX_ORIGINATOR = "codex_cli_rs"
+    private const val DEFAULT_CLIENT_VERSION = "android"
   }
 }

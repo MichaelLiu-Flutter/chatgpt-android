@@ -53,6 +53,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -61,6 +62,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -77,6 +79,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -458,16 +461,57 @@ private fun LocalChatMessageBubble(
       modifier = Modifier.widthIn(max = 320.dp),
       horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
-      Text(
-        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-        text = if (isUser) {
-          stringResource(id = R.string.local_mode_user_label)
-        } else {
-          stringResource(id = R.string.local_mode_assistant_label)
-        },
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-      )
+      if (isUser) {
+        Text(
+          modifier = Modifier
+            .padding(horizontal = 4.dp, vertical = 2.dp)
+            .align(Alignment.End),
+          text = stringResource(id = R.string.local_mode_user_label),
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+      } else {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Text(
+            text = stringResource(id = R.string.local_mode_assistant_label),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+
+          // Keep the copy affordance visually subtle without forcing 48.dp min touch targets.
+          CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+            IconButton(
+              modifier = Modifier.size(28.dp),
+              onClick = {
+                val clip = ClipData.newPlainText(
+                  context.getString(R.string.local_mode_copy_answer),
+                  parsedMessage.answer
+                )
+                val clipboard = context.getSystemService(ClipboardManager::class.java)
+                clipboard?.setPrimaryClip(clip)
+                android.widget.Toast.makeText(
+                  context,
+                  context.getString(R.string.local_mode_copied_to_clipboard),
+                  android.widget.Toast.LENGTH_SHORT
+                ).show()
+              }
+            ) {
+              Icon(
+                modifier = Modifier.size(16.dp),
+                imageVector = Icons.Filled.ContentCopy,
+                contentDescription = stringResource(id = R.string.local_mode_copy_answer),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            }
+          }
+        }
+      }
       Surface(
         shape = RoundedCornerShape(
           topStart = if (isUser) 18.dp else 6.dp,
@@ -501,32 +545,6 @@ private fun LocalChatMessageBubble(
               color = Color.White
             )
           } else {
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.End
-            ) {
-              IconButton(
-                onClick = {
-                  val clip = ClipData.newPlainText(
-                    context.getString(R.string.local_mode_copy_answer),
-                    parsedMessage.answer
-                  )
-                  val clipboard = context.getSystemService(ClipboardManager::class.java)
-                  clipboard?.setPrimaryClip(clip)
-                  android.widget.Toast.makeText(
-                    context,
-                    context.getString(R.string.local_mode_copied_to_clipboard),
-                    android.widget.Toast.LENGTH_SHORT
-                  ).show()
-                }
-              ) {
-                Icon(
-                  imageVector = Icons.Filled.ContentCopy,
-                  contentDescription = stringResource(id = R.string.local_mode_copy_answer),
-                  tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-              }
-            }
             MarkdownMessageText(
               markdown = parsedMessage.answer,
               textColor = MaterialTheme.colorScheme.onSurface,

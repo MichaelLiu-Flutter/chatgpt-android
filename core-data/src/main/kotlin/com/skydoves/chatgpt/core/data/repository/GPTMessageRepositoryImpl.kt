@@ -315,13 +315,16 @@ internal class GPTMessageRepositoryImpl @Inject constructor(
       }
     }.distinctBy { it.id }.sortedBy { it.name.lowercase() }
 
-    if (isPresetConfigsSeededLocked()) {
+    val missingPresetConfigs = presetConfigs.filterNot { preset ->
+      storedCustomConfigs.any { it.id == preset.id }
+    }
+    if (missingPresetConfigs.isEmpty() && isPresetConfigsSeededLocked()) {
       return listOf(defaultConfig) + storedCustomConfigs
     }
 
     val mergedCustomConfigs = buildList {
       addAll(storedCustomConfigs)
-      addAll(presetConfigs.filterNot { preset -> storedCustomConfigs.any { it.id == preset.id } })
+      addAll(missingPresetConfigs)
     }.distinctBy { it.id }.sortedBy { it.name.lowercase() }
     saveCustomGptConfigsLocked(mergedCustomConfigs)
     markPresetConfigsSeededLocked()
@@ -625,13 +628,44 @@ private fun retrofit2.Response<*>.toReadableErrorMessage(): String {
 }
 
 private fun String.toReadableErrorMessage(): String? {
-  if (isEmpty()) return null
+  if (isBlank()) return null
+  val payload = trim()
 
-  return runCatching {
-    val json = JSONObject(this)
+  val directJsonMessage = runCatching {
+    val json = JSONObject(payload)
     val error = json.optJSONObject("error")
     error.optNullableString("message") ?: json.optNullableString("message")
-  }.getOrNull() ?: take(256)
+  }.getOrNull()
+  if (!directJsonMessage.isNullOrBlank()) {
+    return directJsonMessage.extractEmbeddedDetailIfPresent()
+  }
+
+  // Some gateways return SSE-formatted errors inside HTTP error bodies.
+  val sseMessage = payload
+    .lineSequence()
+    .map(String::trim)
+    .firstOrNull { it.startsWith("data:") }
+    ?.removePrefix("data:")
+    ?.trim()
+    ?.takeIf(String::isNotEmpty)
+    ?.let { dataLine ->
+      runCatching {
+        val json = JSONObject(dataLine)
+        val error = json.optJSONObject("error")
+        error.optNullableString("message") ?: json.optNullableString("message")
+      }.getOrNull()
+    }
+  if (!sseMessage.isNullOrBlank()) {
+    return sseMessage.extractEmbeddedDetailIfPresent()
+  }
+
+  return payload.take(256)
+}
+
+private fun String.extractEmbeddedDetailIfPresent(): String {
+  val detailPattern = Regex("""\\"detail\\":\\"([^\\"]+)\\"""")
+  val detail = detailPattern.find(this)?.groupValues?.getOrNull(1)
+  return detail ?: this
 }
 
 private fun JSONObject?.optNullableString(name: String): String? {

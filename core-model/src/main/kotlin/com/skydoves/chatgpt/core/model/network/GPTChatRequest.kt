@@ -24,6 +24,7 @@ import com.squareup.moshi.JsonClass
 data class GPTChatRequest(
   @field:Json(name = "model") val model: String,
   @field:Json(name = "input") val input: List<GPTInputMessage>,
+  @field:Json(name = "instructions") val instructions: String = DEFAULT_INSTRUCTIONS,
   @field:Json(name = "reasoning") val reasoning: GPTReasoning = GPTReasoning(),
   @field:Json(name = "tools") val tools: List<GPTTool> = listOf(GPTTool()),
   @field:Json(name = "stream") val stream: Boolean = false
@@ -43,6 +44,10 @@ data class GPTChatRequest(
       )
     }
   )
+
+  private companion object {
+    private const val DEFAULT_INSTRUCTIONS = "You are a helpful assistant."
+  }
 }
 
 @JsonClass(generateAdapter = true)
