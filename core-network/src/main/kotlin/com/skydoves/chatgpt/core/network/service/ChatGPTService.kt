@@ -24,6 +24,6 @@ import retrofit2.http.POST
 
 interface ChatGPTService {
 
-  @POST("v1/chat/completions")
+  @POST("v1/responses")
   suspend fun sendMessage(@Body request: GPTChatRequest): ApiResponse<GPTChatResponse>
 }

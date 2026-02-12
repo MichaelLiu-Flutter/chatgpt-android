@@ -23,5 +23,50 @@ import com.squareup.moshi.JsonClass
 @JsonClass(generateAdapter = true)
 data class GPTChatRequest(
   @field:Json(name = "model") val model: String,
-  @field:Json(name = "messages") val messages: List<GPTMessage>
+  @field:Json(name = "input") val input: List<GPTInputMessage>,
+  @field:Json(name = "reasoning") val reasoning: GPTReasoning = GPTReasoning(),
+  @field:Json(name = "tools") val tools: List<GPTTool> = listOf(GPTTool())
+) {
+
+  constructor(model: String, messages: List<GPTMessage>) : this(
+    model = model,
+    input = messages.map { message ->
+      GPTInputMessage(
+        role = message.role,
+        content = listOf(
+          GPTInputContent(
+            type = message.toInputContentType(),
+            text = message.content
+          )
+        )
+      )
+    }
+  )
+}
+
+@JsonClass(generateAdapter = true)
+data class GPTInputMessage(
+  @field:Json(name = "role") val role: String,
+  @field:Json(name = "content") val content: List<GPTInputContent>
 )
+
+@JsonClass(generateAdapter = true)
+data class GPTInputContent(
+  @field:Json(name = "type") val type: String = "input_text",
+  @field:Json(name = "text") val text: String
+)
+
+@JsonClass(generateAdapter = true)
+data class GPTReasoning(
+  @field:Json(name = "effort") val effort: String = "high"
+)
+
+@JsonClass(generateAdapter = true)
+data class GPTTool(
+  @field:Json(name = "type") val type: String = "web_search"
+)
+
+private fun GPTMessage.toInputContentType(): String = when (role) {
+  "assistant" -> "output_text"
+  else -> "input_text"
+}

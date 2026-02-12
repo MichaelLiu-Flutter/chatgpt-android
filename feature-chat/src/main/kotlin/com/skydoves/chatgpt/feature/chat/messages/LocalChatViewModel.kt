@@ -64,7 +64,7 @@ class LocalChatViewModel @Inject constructor(
 
       val response = repository.sendMessage(request)
       if (response.isSuccess) {
-        val assistantText = response.getOrThrow().choices.firstOrNull()?.message?.content.orEmpty()
+        val assistantText = response.getOrThrow().extractAssistantText()
         _messages.update { current ->
           current + LocalChatMessage(role = "assistant", content = assistantText)
         }

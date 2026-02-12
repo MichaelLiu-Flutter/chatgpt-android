@@ -22,8 +22,9 @@ import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.WorkerParameters
 import com.skydoves.chatgpt.core.data.repository.GPTMessageRepository
-import com.skydoves.chatgpt.core.model.GPTMessage
 import com.skydoves.chatgpt.core.model.network.GPTChatRequest
+import com.skydoves.chatgpt.core.model.network.GPTInputContent
+import com.skydoves.chatgpt.core.model.network.GPTInputMessage
 import com.skydoves.chatgpt.feature.chat.BuildConfig
 import com.skydoves.chatgpt.feature.chat.di.ChatEntryPoint
 import com.skydoves.sandwich.getOrThrow
@@ -55,30 +56,30 @@ internal class ChatGPTMessageWorker @AssistedInject constructor(
     val channelId = workerParams.inputData.getString(DATA_CHANNEL_ID) ?: return Result.failure()
     val lastMessage = workerParams.inputData.getString(DATA_LAST_MESSAGE)
 
-    val messages: MutableList<GPTMessage> = mutableListOf()
+    val input: MutableList<GPTInputMessage> = mutableListOf()
     if (lastMessage != null) {
-      messages.add(
-        GPTMessage(
+      input.add(
+        GPTInputMessage(
           role = "system",
-          content = lastMessage
+          content = listOf(GPTInputContent(text = lastMessage))
         )
       )
     }
-    messages.add(
-      GPTMessage(
+    input.add(
+      GPTInputMessage(
         role = "user",
-        content = text
+        content = listOf(GPTInputContent(text = text))
       )
     )
 
     val request = GPTChatRequest(
       model = BuildConfig.GPT_MODEL,
-      messages = messages
+      input = input
     )
     val response = repository.sendMessage(request)
     return if (response.isSuccess) {
       val data = response.getOrThrow()
-      val messageText = data.choices.firstOrNull()?.message?.content.orEmpty()
+      val messageText = data.extractAssistantText()
       val messageId = data.id
       sendStreamMessage(messageText, messageId, channelId)
       streamLog { "worker success!" }
