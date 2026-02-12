@@ -16,6 +16,8 @@
 
 package com.skydoves.chatgpt.core.data.repository
 
+import com.skydoves.chatgpt.core.model.local.LocalChatMessage
+import com.skydoves.chatgpt.core.model.local.LocalChatSessionSummary
 import com.skydoves.chatgpt.core.model.network.GPTChatRequest
 import com.skydoves.chatgpt.core.model.network.GPTChatResponse
 import com.skydoves.chatgpt.core.model.network.GPTResponseStreamEvent
@@ -28,6 +30,17 @@ interface GPTMessageRepository {
   suspend fun sendMessage(gptChatRequest: GPTChatRequest): ApiResponse<GPTChatResponse>
 
   fun sendMessageStream(gptChatRequest: GPTChatRequest): Flow<GPTResponseStreamEvent> = emptyFlow()
+
+  suspend fun listLocalChatSessions(): List<LocalChatSessionSummary>
+
+  suspend fun createLocalChatSession(): LocalChatSessionSummary
+
+  suspend fun loadLocalChatSessionMessages(sessionId: String): List<LocalChatMessage>
+
+  suspend fun saveLocalChatSessionMessages(
+    sessionId: String,
+    messages: List<LocalChatMessage>
+  ): LocalChatSessionSummary
 
   fun watchIsChannelMessageEmpty(cid: String): Flow<Boolean>
 }

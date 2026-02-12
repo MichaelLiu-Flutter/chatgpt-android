@@ -44,6 +44,21 @@ sealed class ChatGPTScreens(
   companion object {
     const val argument_channel_id = "channelId"
     const val local_channel_id = "local-gpt"
+    private const val local_channel_session_separator = ":"
+
+    fun isLocalChannel(channelId: String): Boolean {
+      return channelId == local_channel_id ||
+        channelId.startsWith("$local_channel_id$local_channel_session_separator")
+    }
+
+    fun createLocalSessionRoute(sessionId: String): String {
+      return "$local_channel_id$local_channel_session_separator$sessionId"
+    }
+
+    fun localSessionIdOrNull(channelId: String): String? {
+      if (!channelId.startsWith("$local_channel_id$local_channel_session_separator")) return null
+      return channelId.substringAfter(local_channel_session_separator).takeIf(String::isNotBlank)
+    }
   }
 }
 

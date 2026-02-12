@@ -18,27 +18,37 @@
 
 package com.skydoves.chatgpt.feature.chat.channels
 
+import android.text.format.DateUtils
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -50,15 +60,20 @@ import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.skydoves.balloon.compose.Balloon
 import com.skydoves.chatgpt.core.designsystem.component.ChatGPTLoadingIndicator
 import com.skydoves.chatgpt.core.designsystem.composition.LocalOnFinishDispatcher
 import com.skydoves.chatgpt.core.designsystem.theme.STREAM_PRIMARY
+import com.skydoves.chatgpt.core.model.local.LocalChatSessionSummary
 import com.skydoves.chatgpt.core.navigation.AppComposeNavigator
 import com.skydoves.chatgpt.core.navigation.ChatGPTScreens
 import com.skydoves.chatgpt.feature.chat.BuildConfig
 import com.skydoves.chatgpt.feature.chat.R
+import com.skydoves.chatgpt.feature.chat.messages.LocalChatViewModel
 import com.skydoves.chatgpt.feature.chat.theme.ChatGPTStreamTheme
 import io.getstream.chat.android.compose.ui.channels.ChannelsScreen
 
@@ -73,6 +88,43 @@ fun ChatGPTChannels(
     BuildConfig.STREAM_API_KEY != "aaaaaaaaaa"
 
   if (!isStreamEnabled) {
+    val localChatViewModel: LocalChatViewModel = hiltViewModel()
+    val localSessions by localChatViewModel.sessions.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var pendingNewSessionNavigation by remember { mutableStateOf(false) }
+    var previousTopSessionId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+      localChatViewModel.refreshSessions()
+    }
+
+    DisposableEffect(lifecycleOwner, localChatViewModel) {
+      val observer = LifecycleEventObserver { _, event ->
+        if (event == Lifecycle.Event.ON_RESUME) {
+          localChatViewModel.refreshSessions()
+        }
+      }
+      lifecycleOwner.lifecycle.addObserver(observer)
+      onDispose {
+        lifecycleOwner.lifecycle.removeObserver(observer)
+      }
+    }
+
+    LaunchedEffect(localSessions, pendingNewSessionNavigation, previousTopSessionId) {
+      val newTopSessionId = localSessions.firstOrNull()?.id
+      if (pendingNewSessionNavigation &&
+        !newTopSessionId.isNullOrBlank() &&
+        newTopSessionId != previousTopSessionId
+      ) {
+        pendingNewSessionNavigation = false
+        composeNavigator.navigate(
+          ChatGPTScreens.Messages.createRoute(
+            ChatGPTScreens.createLocalSessionRoute(newTopSessionId)
+          )
+        )
+      }
+    }
+
     BackHandler(enabled = true) { onFinishDispatcher?.invoke() }
 
     ChatGPTStreamTheme {
@@ -83,39 +135,57 @@ fun ChatGPTChannels(
       ) {
         Column(
           modifier = Modifier
-            .align(Alignment.Center)
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp),
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
           verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-          Text(
-            text = stringResource(id = R.string.local_mode_history_title),
-            style = MaterialTheme.typography.titleMedium
-          )
-          Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text(
+              text = stringResource(id = R.string.local_mode_history_title),
+              style = MaterialTheme.typography.titleMedium
+            )
+            Button(
+              onClick = {
+                pendingNewSessionNavigation = true
+                previousTopSessionId = localSessions.firstOrNull()?.id
+                localChatViewModel.createSessionAndEnter()
+              }
+            ) {
+              Text(text = stringResource(id = R.string.local_mode_new_chat))
+            }
+          }
+
+          if (localSessions.isEmpty()) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+              Text(
+                modifier = Modifier.padding(16.dp),
+                text = stringResource(id = R.string.local_mode_history_description),
+                style = MaterialTheme.typography.bodyMedium
+              )
+            }
+          } else {
+            LazyColumn(
+              modifier = Modifier.fillMaxSize(),
               verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-              Text(
-                text = stringResource(id = R.string.local_mode_title),
-                style = MaterialTheme.typography.titleSmall
-              )
-              Text(
-                text = stringResource(id = R.string.local_mode_history_description),
-                style = MaterialTheme.typography.bodySmall
-              )
-              Button(
-                modifier = Modifier.align(Alignment.End),
-                onClick = {
-                  composeNavigator.navigate(
-                    ChatGPTScreens.Messages.createRoute(ChatGPTScreens.local_channel_id)
-                  )
-                }
-              ) {
-                Text(text = stringResource(id = R.string.local_mode_open_chat))
+              items(
+                items = localSessions,
+                key = LocalChatSessionSummary::id
+              ) { session ->
+                LocalSessionItem(
+                  session = session,
+                  onClick = {
+                    composeNavigator.navigate(
+                      ChatGPTScreens.Messages.createRoute(
+                        ChatGPTScreens.createLocalSessionRoute(session.id)
+                      )
+                    )
+                  }
+                )
               }
             }
           }
@@ -144,7 +214,9 @@ fun ChatGPTChannels(
         onBackPressed = { onFinishDispatcher?.invoke() }
       )
 
-      val isBalloonDisplayed by channelsViewModel.isBalloonDisplayedState.collectAsStateWithLifecycle()
+      val isBalloonDisplayed by channelsViewModel
+        .isBalloonDisplayedState
+        .collectAsStateWithLifecycle()
 
       Balloon(
         modifier = Modifier
@@ -192,6 +264,44 @@ fun ChatGPTChannels(
       if (uiState == GPTChannelUiState.Loading) {
         ChatGPTLoadingIndicator()
       }
+    }
+  }
+}
+
+@Composable
+private fun LocalSessionItem(
+  session: LocalChatSessionSummary,
+  onClick: () -> Unit
+) {
+  ElevatedCard(
+    modifier = Modifier
+      .fillMaxWidth()
+      .clickable(onClick = onClick)
+  ) {
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 12.dp, vertical = 10.dp),
+      verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+      Text(
+        text = session.title,
+        style = MaterialTheme.typography.titleSmall,
+        maxLines = 1
+      )
+      if (session.preview.isNotBlank()) {
+        Text(
+          text = session.preview,
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 2
+        )
+      }
+      Text(
+        text = DateUtils.getRelativeTimeSpanString(session.updatedAt).toString(),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
     }
   }
 }

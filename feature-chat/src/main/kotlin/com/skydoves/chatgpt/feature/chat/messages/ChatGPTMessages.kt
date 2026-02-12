@@ -32,11 +32,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -69,7 +76,6 @@ import io.getstream.chat.android.compose.ui.components.reactionpicker.ReactionsP
 import io.getstream.chat.android.compose.ui.components.selectedmessage.SelectedMessageMenu
 import io.getstream.chat.android.compose.ui.components.selectedmessage.SelectedReactionsMenu
 import io.getstream.chat.android.compose.ui.messages.composer.MessageComposer
-import io.getstream.chat.android.compose.ui.messages.header.MessageListHeader
 import io.getstream.chat.android.compose.ui.messages.list.MessageContainer
 import io.getstream.chat.android.compose.ui.messages.list.MessageList
 import io.getstream.chat.android.compose.ui.theme.ChatTheme
@@ -105,8 +111,11 @@ fun ChatGPTMessages(
   onBackPressed: () -> Unit = { composeNavigator.navigateUp() },
   onHeaderActionClick: (channel: Channel) -> Unit = {}
 ) {
-  if (channelId == ChatGPTScreens.local_channel_id) {
-    LocalChatGPTMessages(onBackPressed = onBackPressed)
+  if (ChatGPTScreens.isLocalChannel(channelId)) {
+    LocalChatGPTMessages(
+      onBackPressed = onBackPressed,
+      sessionId = ChatGPTScreens.localSessionIdOrNull(channelId)
+    )
     return
   }
 
@@ -160,24 +169,11 @@ fun ChatGPTMessages(
         modifier = Modifier.fillMaxSize(),
         topBar = {
           if (showHeader) {
-            val messageMode = listViewModel.messageMode
-            val connectionState by listViewModel.connectionState.collectAsStateWithLifecycle()
-            val user by listViewModel.user.collectAsStateWithLifecycle()
-            val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-
-            MessageListHeader(
-              modifier = Modifier.height(62.dp),
-              channel = listViewModel.channel,
-              currentUser = user,
-              typingUsers = if (isLoading) {
-                listOf(chatGPTUser)
-              } else {
-                emptyList()
-              },
-              connectionState = connectionState,
-              messageMode = messageMode,
-              onBackPressed = backAction,
-              onHeaderTitleClick = onHeaderActionClick
+            CompactMessageTopBar(
+              title = listViewModel.channel?.name
+                ?.takeIf(String::isNotBlank)
+                ?: stringResource(id = R.string.stream_top_bar),
+              onBackPressed = backAction
             )
           }
         },
@@ -273,6 +269,36 @@ fun ChatGPTMessages(
       )
 
       MessageDialogs(listViewModel = listViewModel)
+    }
+  }
+}
+
+@Composable
+private fun CompactMessageTopBar(
+  title: String,
+  onBackPressed: () -> Unit
+) {
+  Surface(
+    modifier = Modifier.fillMaxWidth(),
+    tonalElevation = 1.dp
+  ) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 4.dp, vertical = 2.dp),
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      IconButton(onClick = onBackPressed) {
+        Icon(
+          imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+          contentDescription = null
+        )
+      }
+      Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        maxLines = 1
+      )
     }
   }
 }

@@ -20,6 +20,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.skydoves.chatgpt.core.data.repository.GPTMessageRepository
 import com.skydoves.chatgpt.core.model.GPTMessage
+import com.skydoves.chatgpt.core.model.local.LocalChatMessage
+import com.skydoves.chatgpt.core.model.local.LocalChatSessionSummary
+import com.skydoves.chatgpt.core.model.local.LocalChatToolEvent
 import com.skydoves.chatgpt.core.model.network.GPTChatRequest
 import com.skydoves.chatgpt.core.model.network.GPTChatResponse
 import com.skydoves.chatgpt.core.model.network.GPTReasoning
@@ -32,10 +35,11 @@ import com.skydoves.sandwich.messageOrNull
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -47,18 +51,43 @@ class LocalChatViewModel @Inject constructor(
   private val _messages = MutableStateFlow<List<LocalChatMessage>>(emptyList())
   val messages: StateFlow<List<LocalChatMessage>> = _messages.asStateFlow()
 
+  private val _sessions = MutableStateFlow<List<LocalChatSessionSummary>>(emptyList())
+  val sessions: StateFlow<List<LocalChatSessionSummary>> = _sessions.asStateFlow()
+
   private val _sending = MutableStateFlow(false)
   val sending: StateFlow<Boolean> = _sending.asStateFlow()
+
+  private val _activeSessionId = MutableStateFlow<String?>(null)
+  val activeSessionId: StateFlow<String?> = _activeSessionId.asStateFlow()
+
+  private var currentSendJob: Job? = null
+  private var pauseRequested: Boolean = false
+
+  init {
+    viewModelScope.launch {
+      val localSessions = repository.listLocalChatSessions()
+      if (localSessions.isEmpty()) {
+        val session = repository.createLocalChatSession()
+        _sessions.value = listOf(session)
+        _activeSessionId.value = session.id
+        _messages.value = emptyList()
+      } else {
+        _sessions.value = localSessions
+        val initialSessionId = localSessions.first().id
+        _activeSessionId.value = initialSessionId
+        _messages.value = repository.loadLocalChatSessionMessages(initialSessionId)
+      }
+    }
+  }
 
   fun sendMessage(text: String) {
     val trimmedText = text.trim()
     if (trimmedText.isEmpty() || _sending.value) return
 
-    _messages.update { current ->
-      current + LocalChatMessage(role = USER_ROLE, content = trimmedText)
-    }
+    currentSendJob = viewModelScope.launch {
+      ensureActiveSession()
+      appendUserMessage(trimmedText)
 
-    viewModelScope.launch {
       _sending.value = true
       var assistantPlaceholderAdded = false
       try {
@@ -91,7 +120,11 @@ class LocalChatViewModel @Inject constructor(
           }
         }
       } catch (cancellationException: CancellationException) {
-        throw cancellationException
+        if (pauseRequested) {
+          completeStreamingAssistant()
+        } else {
+          throw cancellationException
+        }
       } catch (throwable: Throwable) {
         val errorText = throwable.message ?: DEFAULT_REQUEST_ERROR_MESSAGE
         if (assistantPlaceholderAdded) {
@@ -100,8 +133,72 @@ class LocalChatViewModel @Inject constructor(
           appendAssistantError(errorText)
         }
       } finally {
+        persistCurrentSession()
         _sending.value = false
+        pauseRequested = false
+        currentSendJob = null
       }
+    }
+  }
+
+  fun pauseGenerating() {
+    if (!_sending.value) return
+    pauseRequested = true
+    currentSendJob?.cancel(CancellationException(PAUSE_CANCELLATION_MESSAGE))
+  }
+
+  fun createSessionAndEnter() {
+    viewModelScope.launch {
+      if (_sending.value) {
+        pauseGenerating()
+        currentSendJob?.join()
+      }
+
+      val session = repository.createLocalChatSession()
+      _activeSessionId.value = session.id
+      _messages.value = emptyList()
+      _sessions.update { sessions ->
+        listOf(session) + sessions.filterNot { it.id == session.id }
+      }
+    }
+  }
+
+  fun refreshSessions() {
+    viewModelScope.launch {
+      val latestSessions = repository.listLocalChatSessions()
+      _sessions.value = latestSessions
+
+      val currentSessionId = _activeSessionId.value
+      if (currentSessionId == null) {
+        val fallbackSessionId = latestSessions.firstOrNull()?.id ?: return@launch
+        _activeSessionId.value = fallbackSessionId
+        _messages.value = repository.loadLocalChatSessionMessages(fallbackSessionId)
+        return@launch
+      }
+
+      if (latestSessions.none { it.id == currentSessionId }) {
+        val fallbackSessionId = latestSessions.firstOrNull()?.id ?: return@launch
+        _activeSessionId.value = fallbackSessionId
+        _messages.value = repository.loadLocalChatSessionMessages(fallbackSessionId)
+      }
+    }
+  }
+
+  fun loadSession(sessionId: String) {
+    if (sessionId.isBlank()) return
+
+    viewModelScope.launch {
+      if (_sending.value) {
+        pauseGenerating()
+        currentSendJob?.join()
+      }
+
+      val messages = repository.loadLocalChatSessionMessages(sessionId)
+      _activeSessionId.value = sessionId
+      _messages.value = messages
+
+      val sessions = repository.listLocalChatSessions()
+      _sessions.value = sessions
     }
   }
 
@@ -221,6 +318,53 @@ class LocalChatViewModel @Inject constructor(
     return repository.sendMessage(lowerReasoningRequest.copy(tools = emptyList()))
   }
 
+  private suspend fun ensureActiveSession() {
+    if (_activeSessionId.value != null) return
+    val sessions = repository.listLocalChatSessions()
+    if (sessions.isNotEmpty()) {
+      _sessions.value = sessions
+      _activeSessionId.value = sessions.first().id
+      return
+    }
+
+    val session = repository.createLocalChatSession()
+    _sessions.value = listOf(session)
+    _activeSessionId.value = session.id
+  }
+
+  private suspend fun persistCurrentSession() {
+    val sessionId = _activeSessionId.value ?: return
+    persistSessionSnapshot(sessionId = sessionId, messages = _messages.value)
+  }
+
+  private fun persistCurrentSessionAsync() {
+    val sessionId = _activeSessionId.value ?: return
+    val snapshot = _messages.value
+    viewModelScope.launch {
+      persistSessionSnapshot(sessionId = sessionId, messages = snapshot)
+    }
+  }
+
+  private suspend fun persistSessionSnapshot(
+    sessionId: String,
+    messages: List<LocalChatMessage>
+  ) {
+    val summary = repository.saveLocalChatSessionMessages(
+      sessionId = sessionId,
+      messages = messages
+    )
+    _sessions.update { sessions ->
+      listOf(summary) + sessions.filterNot { it.id == summary.id }
+    }
+  }
+
+  private fun appendUserMessage(content: String) {
+    _messages.update { current ->
+      current + LocalChatMessage(role = USER_ROLE, content = content)
+    }
+    persistCurrentSessionAsync()
+  }
+
   private fun appendStreamingAssistantPlaceholder() {
     _messages.update { current ->
       current + LocalChatMessage(
@@ -229,6 +373,7 @@ class LocalChatViewModel @Inject constructor(
         isStreaming = true
       )
     }
+    persistCurrentSessionAsync()
   }
 
   private fun completeStreamingAssistant() {
@@ -273,6 +418,7 @@ class LocalChatViewModel @Inject constructor(
         isError = true
       )
     }
+    persistCurrentSessionAsync()
   }
 
   private fun replaceStreamingAssistant(
@@ -326,6 +472,7 @@ class LocalChatViewModel @Inject constructor(
         this[lastIndex] = transform(lastMessage)
       }
     }
+    persistCurrentSessionAsync()
   }
 
   private fun StreamAttemptResult.shouldRetryWithLowerReasoning(): Boolean =
@@ -364,6 +511,7 @@ class LocalChatViewModel @Inject constructor(
 
     private const val DEFAULT_STREAM_ERROR_MESSAGE = "stream request failed"
     private const val DEFAULT_REQUEST_ERROR_MESSAGE = "request failed"
+    private const val PAUSE_CANCELLATION_MESSAGE = "paused by user"
   }
 }
 
@@ -395,21 +543,4 @@ private data class StreamAttemptResult(
   val completed: Boolean,
   val errorMessage: String?,
   val hasVisibleOutput: Boolean
-)
-
-data class LocalChatMessage(
-  val role: String,
-  val content: String,
-  val reasoning: String? = null,
-  val toolEvents: List<LocalChatToolEvent> = emptyList(),
-  val isStreaming: Boolean = false,
-  val isError: Boolean = false
-)
-
-data class LocalChatToolEvent(
-  val type: String,
-  val status: String? = null,
-  val itemType: String? = null,
-  val query: String? = null,
-  val message: String? = null
 )

@@ -2,6 +2,8 @@ package com.skydoves.chatgpt.feature.chat.messages
 
 import com.skydoves.chatgpt.core.data.repository.GPTMessageRepository
 import com.skydoves.chatgpt.core.model.GPTMessage
+import com.skydoves.chatgpt.core.model.local.LocalChatMessage
+import com.skydoves.chatgpt.core.model.local.LocalChatSessionSummary
 import com.skydoves.chatgpt.core.model.network.GPTChatRequest
 import com.skydoves.chatgpt.core.model.network.GPTChatResponse
 import com.skydoves.chatgpt.core.model.network.GPTResponseOutput
@@ -305,6 +307,7 @@ class LocalChatViewModelTest {
   private class QueueingRepository(
     private val responses: ArrayDeque<ApiResponse<GPTChatResponse>>,
   ) : GPTMessageRepository {
+    private var sessionMessages: List<LocalChatMessage> = emptyList()
     val requests = mutableListOf<GPTChatRequest>()
 
     override suspend fun sendMessage(gptChatRequest: GPTChatRequest): ApiResponse<GPTChatResponse> {
@@ -313,10 +316,46 @@ class LocalChatViewModelTest {
         ?: throw AssertionError("No queued response left for sendMessage")
     }
 
+    override suspend fun listLocalChatSessions(): List<LocalChatSessionSummary> = listOf(
+      LocalChatSessionSummary(
+        id = SESSION_ID,
+        title = "New Chat",
+        preview = "",
+        updatedAt = 0L,
+        messageCount = sessionMessages.size
+      )
+    )
+
+    override suspend fun createLocalChatSession(): LocalChatSessionSummary = LocalChatSessionSummary(
+      id = SESSION_ID,
+      title = "New Chat",
+      preview = "",
+      updatedAt = 0L,
+      messageCount = 0
+    )
+
+    override suspend fun loadLocalChatSessionMessages(sessionId: String): List<LocalChatMessage> =
+      sessionMessages
+
+    override suspend fun saveLocalChatSessionMessages(
+      sessionId: String,
+      messages: List<LocalChatMessage>
+    ): LocalChatSessionSummary {
+      sessionMessages = messages
+      return LocalChatSessionSummary(
+        id = sessionId,
+        title = "New Chat",
+        preview = messages.lastOrNull()?.content.orEmpty(),
+        updatedAt = 0L,
+        messageCount = messages.size
+      )
+    }
+
     override fun watchIsChannelMessageEmpty(cid: String): Flow<Boolean> = emptyFlow()
   }
 
   private class SuspendedRepository : GPTMessageRepository {
+    private var sessionMessages: List<LocalChatMessage> = emptyList()
     val requests = mutableListOf<GPTChatRequest>()
     val response = CompletableDeferred<ApiResponse<GPTChatResponse>>()
 
@@ -325,6 +364,45 @@ class LocalChatViewModelTest {
       return response.await()
     }
 
+    override suspend fun listLocalChatSessions(): List<LocalChatSessionSummary> = listOf(
+      LocalChatSessionSummary(
+        id = SESSION_ID,
+        title = "New Chat",
+        preview = "",
+        updatedAt = 0L,
+        messageCount = sessionMessages.size
+      )
+    )
+
+    override suspend fun createLocalChatSession(): LocalChatSessionSummary = LocalChatSessionSummary(
+      id = SESSION_ID,
+      title = "New Chat",
+      preview = "",
+      updatedAt = 0L,
+      messageCount = 0
+    )
+
+    override suspend fun loadLocalChatSessionMessages(sessionId: String): List<LocalChatMessage> =
+      sessionMessages
+
+    override suspend fun saveLocalChatSessionMessages(
+      sessionId: String,
+      messages: List<LocalChatMessage>
+    ): LocalChatSessionSummary {
+      sessionMessages = messages
+      return LocalChatSessionSummary(
+        id = sessionId,
+        title = "New Chat",
+        preview = messages.lastOrNull()?.content.orEmpty(),
+        updatedAt = 0L,
+        messageCount = messages.size
+      )
+    }
+
     override fun watchIsChannelMessageEmpty(cid: String): Flow<Boolean> = emptyFlow()
+  }
+
+  private companion object {
+    private const val SESSION_ID = "session-test"
   }
 }

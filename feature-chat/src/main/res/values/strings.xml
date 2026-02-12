@@ -21,9 +21,11 @@
   <string name="toast_error">For more details, check out OpenAI API guidelines: https://platform.openai.com/docs/guides/rate-limits?context=tier-free</string>
   <string name="local_mode_title">Local GPT Mode</string>
   <string name="local_mode_history_title">Chat History</string>
-  <string name="local_mode_history_description">Stream is not configured. Use local session chat here.</string>
+  <string name="local_mode_history_description">Stream is not configured. Continue your local sessions here.</string>
   <string name="local_mode_open_chat">Open chat</string>
   <string name="local_mode_back">Back</string>
+  <string name="local_mode_new_chat">New chat</string>
+  <string name="local_mode_pause">Pause</string>
   <string name="local_mode_subtitle_ready">%1$d messages in this chat</string>
   <string name="local_mode_subtitle_sending">Assistant is thinking...</string>
   <string name="local_mode_streaming_placeholder">Thinking…</string>
@@ -34,9 +36,9 @@
   <string name="local_mode_input_placeholder">Type a message</string>
   <string name="local_mode_send">Send</string>
   <string name="local_mode_reasoning_title">思考过程</string>
-  <string name="local_mode_reasoning_show">展开模型过程</string>
-  <string name="local_mode_reasoning_hide">收起模型过程</string>
-  <string name="local_mode_process_title">模型过程时间线</string>
+  <string name="local_mode_reasoning_show">展开思考过程</string>
+  <string name="local_mode_reasoning_hide">收起思考过程</string>
+  <string name="local_mode_process_title">思考过程</string>
   <string name="local_mode_reasoning_empty">本次回复未提供思考摘要。</string>
   <string name="local_mode_reasoning_pending">正在实时接收思考摘要…</string>
   <string name="local_mode_tool_calls_title">工具调用过程</string>

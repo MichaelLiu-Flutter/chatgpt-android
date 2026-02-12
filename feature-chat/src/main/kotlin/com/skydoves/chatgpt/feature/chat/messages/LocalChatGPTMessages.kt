@@ -31,20 +31,19 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -70,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.skydoves.chatgpt.core.model.local.LocalChatMessage
 import com.skydoves.chatgpt.feature.chat.R
 import com.skydoves.chatgpt.feature.chat.theme.ChatGPTStreamTheme
 import io.noties.markwon.AbstractMarkwonPlugin
@@ -79,6 +79,7 @@ import io.noties.markwon.MarkwonConfiguration
 @Composable
 fun LocalChatGPTMessages(
   onBackPressed: () -> Unit,
+  sessionId: String? = null,
   viewModel: LocalChatViewModel = hiltViewModel()
 ) {
   val messages by viewModel.messages.collectAsStateWithLifecycle()
@@ -94,6 +95,10 @@ fun LocalChatGPTMessages(
     input = ""
   }
 
+  LaunchedEffect(sessionId) {
+    sessionId?.let(viewModel::loadSession)
+  }
+
   LaunchedEffect(messages.size) {
     if (messages.isNotEmpty()) {
       listState.animateScrollToItem(messages.lastIndex)
@@ -105,7 +110,7 @@ fun LocalChatGPTMessages(
       colors = listOf(
         MaterialTheme.colorScheme.surface,
         MaterialTheme.colorScheme.background,
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
       )
     )
 
@@ -115,11 +120,7 @@ fun LocalChatGPTMessages(
         .background(backgroundBrush)
     ) {
       Column(modifier = Modifier.fillMaxSize()) {
-        LocalChatHeader(
-          onBackPressed = onBackPressed,
-          sending = sending,
-          messageCount = messages.size
-        )
+        LocalChatHeader(onBackPressed = onBackPressed)
 
         if (messages.isEmpty()) {
           LocalChatEmptyState(
@@ -155,7 +156,8 @@ fun LocalChatGPTMessages(
           input = input,
           sending = sending,
           onInputChange = { input = it },
-          onSendClick = ::onSendMessage
+          onSendClick = ::onSendMessage,
+          onPauseClick = viewModel::pauseGenerating
         )
       }
     }
@@ -164,49 +166,29 @@ fun LocalChatGPTMessages(
 
 @Composable
 private fun LocalChatHeader(
-  onBackPressed: () -> Unit,
-  sending: Boolean,
-  messageCount: Int
+  onBackPressed: () -> Unit
 ) {
   Surface(
-    modifier = Modifier
-      .fillMaxWidth()
-      .padding(horizontal = 12.dp, vertical = 10.dp),
-    color = MaterialTheme.colorScheme.surfaceVariant,
-    shape = RoundedCornerShape(16.dp),
-    tonalElevation = 2.dp
+    modifier = Modifier.fillMaxWidth(),
+    color = MaterialTheme.colorScheme.surface,
+    tonalElevation = 1.dp
   ) {
     Row(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 12.dp, vertical = 10.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.SpaceBetween
+        .padding(horizontal = 4.dp, vertical = 2.dp),
+      verticalAlignment = Alignment.CenterVertically
     ) {
-      Column(
-        modifier = Modifier.weight(1f),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
-      ) {
-        Text(
-          text = stringResource(id = R.string.local_mode_title),
-          style = MaterialTheme.typography.titleMedium
-        )
-        Text(
-          text = if (sending) {
-            stringResource(id = R.string.local_mode_subtitle_sending)
-          } else {
-            stringResource(
-              id = R.string.local_mode_subtitle_ready,
-              messageCount
-            )
-          },
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
+      IconButton(onClick = onBackPressed) {
+        Icon(
+          imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+          contentDescription = stringResource(id = R.string.local_mode_back)
         )
       }
-      TextButton(onClick = onBackPressed) {
-        Text(text = stringResource(id = R.string.local_mode_back))
-      }
+      Text(
+        text = stringResource(id = R.string.local_mode_title),
+        style = MaterialTheme.typography.titleMedium
+      )
     }
   }
 }
@@ -244,7 +226,6 @@ private fun LocalChatMessageBubble(
     message.role,
     message.content,
     message.reasoning,
-    message.toolEvents,
     message.isStreaming,
     emptyResponse,
     streamingPlaceholder
@@ -257,8 +238,7 @@ private fun LocalChatMessageBubble(
           emptyResponse
         }
       },
-      reasoning = message.reasoning?.trim()?.ifBlank { null },
-      toolEvents = message.toolEvents
+      reasoning = message.reasoning?.trim()?.ifBlank { null }
     )
   }
 
@@ -321,7 +301,6 @@ private fun LocalChatMessageBubble(
             ReasoningSection(
               index = index,
               reasoning = parsedMessage.reasoning,
-              toolEvents = parsedMessage.toolEvents,
               isStreaming = message.isStreaming
             )
           }
@@ -335,44 +314,13 @@ private fun LocalChatMessageBubble(
 private fun ReasoningSection(
   index: Int,
   reasoning: String?,
-  toolEvents: List<LocalChatToolEvent>,
   isStreaming: Boolean
 ) {
-  val shouldShowProcess = reasoning != null || toolEvents.isNotEmpty() || isStreaming
+  val shouldShowProcess = reasoning != null || isStreaming
   if (!shouldShowProcess) return
 
-  val reasoningPending = stringResource(id = R.string.local_mode_reasoning_pending)
-  val toolsPending = stringResource(id = R.string.local_mode_tool_calls_pending)
-  var expanded by rememberSaveable(
-    index,
-    reasoning,
-    toolEvents.hashCode(),
-    isStreaming
-  ) { mutableStateOf(isStreaming) }
-  val timelineItems = remember(reasoning, toolEvents, isStreaming, reasoningPending, toolsPending) {
-    listOf(
-      ProcessTimelineItem(
-        titleRes = R.string.local_mode_reasoning_title,
-        content = reasoning,
-        emptyRes = if (isStreaming) {
-          R.string.local_mode_reasoning_pending
-        } else {
-          R.string.local_mode_reasoning_empty
-        }
-      ),
-      ProcessTimelineItem(
-        titleRes = R.string.local_mode_tool_calls_title,
-        content = toolEvents
-          .map(LocalChatToolEvent::toCliText)
-          .joinToString(separator = "\n")
-          .ifBlank { null },
-        emptyRes = if (isStreaming) {
-          R.string.local_mode_tool_calls_pending
-        } else {
-          R.string.local_mode_tool_calls_empty
-        }
-      )
-    )
+  var expanded by rememberSaveable(index, reasoning, isStreaming) {
+    mutableStateOf(isStreaming)
   }
 
   Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -404,86 +352,33 @@ private fun ReasoningSection(
           modifier = Modifier
             .fillMaxWidth()
             .padding(10.dp),
-          verticalArrangement = Arrangement.spacedBy(10.dp)
+          verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
           Text(
-            text = stringResource(id = R.string.local_mode_process_title),
+            text = stringResource(id = R.string.local_mode_reasoning_title),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
-          timelineItems.forEachIndexed { timelineIndex, item ->
-            ProcessTimelineRow(
-              isLast = timelineIndex == timelineItems.lastIndex,
-              title = stringResource(id = item.titleRes),
-              content = item.content,
-              emptyContent = stringResource(id = item.emptyRes)
+
+          val content = reasoning?.takeIf(String::isNotBlank)
+          if (content == null) {
+            Text(
+              text = if (isStreaming) {
+                stringResource(id = R.string.local_mode_reasoning_pending)
+              } else {
+                stringResource(id = R.string.local_mode_reasoning_empty)
+              },
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+          } else {
+            MarkdownMessageText(
+              markdown = content,
+              textColor = MaterialTheme.colorScheme.onSurfaceVariant,
+              textSizeSp = MaterialTheme.typography.bodySmall.fontSize.value
             )
           }
         }
-      }
-    }
-  }
-}
-
-@Composable
-private fun ProcessTimelineRow(
-  isLast: Boolean,
-  title: String,
-  content: String?,
-  emptyContent: String
-) {
-  Row(
-    modifier = Modifier.fillMaxWidth(),
-    horizontalArrangement = Arrangement.spacedBy(8.dp),
-    verticalAlignment = Alignment.Top
-  ) {
-    Column(
-      horizontalAlignment = Alignment.CenterHorizontally,
-      modifier = Modifier.padding(top = 4.dp)
-    ) {
-      Box(
-        modifier = Modifier
-          .size(8.dp)
-          .background(
-            color = MaterialTheme.colorScheme.primary,
-            shape = CircleShape
-          )
-      )
-      if (!isLast) {
-        Box(
-          modifier = Modifier
-            .padding(top = 4.dp)
-            .width(2.dp)
-            .height(26.dp)
-            .background(
-              color = MaterialTheme.colorScheme.outlineVariant,
-              shape = RoundedCornerShape(4.dp)
-            )
-        )
-      }
-    }
-
-    Column(
-      modifier = Modifier.fillMaxWidth(),
-      verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-      Text(
-        text = title,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-      )
-      if (content.isNullOrBlank()) {
-        Text(
-          text = emptyContent,
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-      } else {
-        MarkdownMessageText(
-          markdown = content,
-          textColor = MaterialTheme.colorScheme.onSurfaceVariant,
-          textSizeSp = MaterialTheme.typography.bodySmall.fontSize.value
-        )
       }
     }
   }
@@ -551,46 +446,50 @@ private fun LocalInputSection(
   input: String,
   sending: Boolean,
   onInputChange: (String) -> Unit,
-  onSendClick: () -> Unit
+  onSendClick: () -> Unit,
+  onPauseClick: () -> Unit
 ) {
   Surface(tonalElevation = 3.dp) {
-    Row(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 12.dp, vertical = 10.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-      OutlinedTextField(
-        modifier = Modifier.weight(1f),
-        value = input,
-        onValueChange = onInputChange,
-        enabled = !sending,
-        maxLines = 4,
-        placeholder = {
-          Text(text = stringResource(id = R.string.local_mode_input_placeholder))
-        },
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-        keyboardActions = KeyboardActions(
-          onSend = {
-            if (input.isNotBlank() && !sending) {
-              onSendClick()
-            }
-          }
-        )
-      )
-      Button(
-        enabled = input.isNotBlank() && !sending,
-        onClick = onSendClick
+    if (sending) {
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.End
       ) {
-        if (sending) {
-          CircularProgressIndicator(
-            modifier = Modifier
-              .size(18.dp)
-              .padding(2.dp),
-            strokeWidth = 2.dp
+        Button(onClick = onPauseClick) {
+          Text(text = stringResource(id = R.string.local_mode_pause))
+        }
+      }
+    } else {
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+      ) {
+        OutlinedTextField(
+          modifier = Modifier.weight(1f),
+          value = input,
+          onValueChange = onInputChange,
+          maxLines = 3,
+          placeholder = {
+            Text(text = stringResource(id = R.string.local_mode_input_placeholder))
+          },
+          keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+          keyboardActions = KeyboardActions(
+            onSend = {
+              if (input.isNotBlank()) {
+                onSendClick()
+              }
+            }
           )
-        } else {
+        )
+        Button(
+          enabled = input.isNotBlank(),
+          onClick = onSendClick
+        ) {
           Text(text = stringResource(id = R.string.local_mode_send))
         }
       }
@@ -600,23 +499,8 @@ private fun LocalInputSection(
 
 private data class ParsedLocalMessage(
   val answer: String,
-  val reasoning: String?,
-  val toolEvents: List<LocalChatToolEvent>
+  val reasoning: String?
 )
-
-private data class ProcessTimelineItem(
-  val titleRes: Int,
-  val content: String?,
-  val emptyRes: Int
-)
-
-private fun LocalChatToolEvent.toCliText(): String {
-  val statusText = status?.takeIf(String::isNotBlank)?.uppercase()?.let { "[$it] " }.orEmpty()
-  val messageText = message?.takeIf(String::isNotBlank)?.let { " - $it" }.orEmpty()
-  val queryText = query?.takeIf(String::isNotBlank)?.let { " query=\"$it\"" }.orEmpty()
-  val itemTypeText = itemType?.takeIf(String::isNotBlank)?.let { " item=$it" }.orEmpty()
-  return "$statusText$type$itemTypeText$queryText$messageText".trim()
-}
 
 private const val USER_ROLE = "user"
 private const val DEFAULT_MARKDOWN_TEXT_SIZE = 16f
