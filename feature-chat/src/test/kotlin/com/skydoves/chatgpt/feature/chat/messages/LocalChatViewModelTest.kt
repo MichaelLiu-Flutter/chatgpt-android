@@ -95,13 +95,25 @@ class LocalChatViewModelTest {
 
       assertTrue(viewModel.sending.value)
       assertEquals(1, repository.requests.size)
-      assertEquals(listOf(LocalChatMessage(role = "user", content = "one")), viewModel.messages.value)
+      assertEquals(
+        listOf(
+          LocalChatMessage(role = "user", content = "one"),
+          LocalChatMessage(role = "assistant", content = "", isStreaming = true),
+        ),
+        viewModel.messages.value
+      )
 
       viewModel.sendMessage("two")
       runCurrent()
 
       assertEquals(1, repository.requests.size)
-      assertEquals(listOf(LocalChatMessage(role = "user", content = "one")), viewModel.messages.value)
+      assertEquals(
+        listOf(
+          LocalChatMessage(role = "user", content = "one"),
+          LocalChatMessage(role = "assistant", content = "", isStreaming = true),
+        ),
+        viewModel.messages.value
+      )
 
       repository.response.complete(
         ApiResponse.Success(

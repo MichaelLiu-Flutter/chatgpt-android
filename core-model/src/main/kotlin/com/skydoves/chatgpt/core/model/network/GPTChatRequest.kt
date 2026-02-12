@@ -25,7 +25,8 @@ data class GPTChatRequest(
   @field:Json(name = "model") val model: String,
   @field:Json(name = "input") val input: List<GPTInputMessage>,
   @field:Json(name = "reasoning") val reasoning: GPTReasoning = GPTReasoning(),
-  @field:Json(name = "tools") val tools: List<GPTTool> = listOf(GPTTool())
+  @field:Json(name = "tools") val tools: List<GPTTool> = listOf(GPTTool()),
+  @field:Json(name = "stream") val stream: Boolean = false
 ) {
 
   constructor(model: String, messages: List<GPTMessage>) : this(

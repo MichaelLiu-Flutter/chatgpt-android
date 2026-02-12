@@ -19,11 +19,20 @@ package com.skydoves.chatgpt.core.network.service
 import com.skydoves.chatgpt.core.model.network.GPTChatRequest
 import com.skydoves.chatgpt.core.model.network.GPTChatResponse
 import com.skydoves.sandwich.ApiResponse
+import okhttp3.ResponseBody
+import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.Headers
 import retrofit2.http.POST
+import retrofit2.http.Streaming
 
 interface ChatGPTService {
 
   @POST("v1/responses")
   suspend fun sendMessage(@Body request: GPTChatRequest): ApiResponse<GPTChatResponse>
+
+  @Streaming
+  @Headers("Accept: text/event-stream")
+  @POST("v1/responses")
+  suspend fun sendMessageStream(@Body request: GPTChatRequest): Response<ResponseBody>
 }

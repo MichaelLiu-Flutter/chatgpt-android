@@ -51,12 +51,19 @@ internal object NetworkModule {
       .callTimeout(0, TimeUnit.SECONDS)
       .apply {
         if (BuildConfig.DEBUG) {
-          this.addNetworkInterceptor(
-            HttpLoggingInterceptor().apply {
-              level = HttpLoggingInterceptor.Level.BODY
-              redactHeader("Authorization")
+          val logger = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+            redactHeader("Authorization")
+          }
+          // BODY logging buffers the whole stream and blocks SSE updates.
+          this.addInterceptor { chain ->
+            val accept = chain.request().header("Accept").orEmpty()
+            if (accept.contains("text/event-stream", ignoreCase = true)) {
+              chain.proceed(chain.request())
+            } else {
+              logger.intercept(chain)
             }
-          )
+          }
         }
       }
       .build()

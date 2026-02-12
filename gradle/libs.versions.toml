@@ -39,6 +39,7 @@ moshi="1.15.2"
 spotless = "6.7.0"
 snitcher = "1.0.3"
 firebaseBom = "33.10.0"
+markwon = "4.6.2"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit4" }
@@ -95,6 +96,7 @@ firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "fir
 firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
 firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
+markwon-core = { group = "io.noties.markwon", name = "core", version.ref = "markwon" }
 
 # Dependencies of the included build-logic
 android-gradlePlugin = { group = "com.android.tools.build", name = "gradle", version.ref = "androidGradlePlugin" }

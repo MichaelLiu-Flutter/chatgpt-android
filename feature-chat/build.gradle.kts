@@ -44,6 +44,7 @@ dependencies {
   implementation(libs.androidx.worker)
   implementation(libs.viewmodel.lifecycle)
   implementation(libs.hilt.worker)
+  implementation(libs.markwon.core)
 
   implementation(libs.balloon.compose)
 
