@@ -22,6 +22,7 @@ import android.text.format.DateUtils
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +44,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
@@ -136,6 +138,7 @@ fun ChatGPTChannels(
       Box(
         modifier = modifier
           .fillMaxSize()
+          .background(Color.White)
           .semantics { testTagsAsResourceId = true }
       ) {
         Column(
@@ -151,7 +154,8 @@ fun ChatGPTChannels(
           ) {
             Text(
               text = stringResource(id = R.string.local_mode_history_title),
-              style = MaterialTheme.typography.titleMedium
+              style = MaterialTheme.typography.titleMedium,
+              color = Color.Black
             )
             Button(
               onClick = {
@@ -165,11 +169,15 @@ fun ChatGPTChannels(
           }
 
           if (localSessions.isEmpty()) {
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(
+              modifier = Modifier.fillMaxWidth(),
+              colors = CardDefaults.cardColors(containerColor = Color.White)
+            ) {
               Text(
                 modifier = Modifier.padding(16.dp),
                 text = stringResource(id = R.string.local_mode_history_description),
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.Black
               )
             }
           } else {
@@ -326,7 +334,8 @@ private fun LocalSessionItem(
   ElevatedCard(
     modifier = Modifier
       .fillMaxWidth()
-      .clickable(onClick = onClick)
+      .clickable(onClick = onClick),
+    colors = CardDefaults.elevatedCardColors(containerColor = Color.White)
   ) {
     Column(
       modifier = Modifier

@@ -462,10 +462,12 @@ class LocalChatViewModel @Inject constructor(
   }
 
   private fun appendStreamingAssistantPlaceholder() {
+    val agentNameSnapshot = activeAgentNameSnapshot()
     _messages.update { current ->
       current + LocalChatMessage(
         role = ASSISTANT_ROLE,
         content = "",
+        agentName = agentNameSnapshot,
         isStreaming = true
       )
     }
@@ -507,10 +509,12 @@ class LocalChatViewModel @Inject constructor(
   }
 
   private fun appendAssistantError(errorText: String) {
+    val agentNameSnapshot = activeAgentNameSnapshot()
     _messages.update { current ->
       current + LocalChatMessage(
         role = ASSISTANT_ROLE,
         content = "Error: $errorText",
+        agentName = agentNameSnapshot,
         isError = true
       )
     }
@@ -603,6 +607,11 @@ class LocalChatViewModel @Inject constructor(
     val activeConfig = repository.getActiveGptConfig()
     _gptConfigs.value = configs
     _activeGptConfigId.value = activeConfig.id
+  }
+
+  private fun activeAgentNameSnapshot(): String? {
+    val activeId = _activeGptConfigId.value ?: return null
+    return _gptConfigs.value.firstOrNull { it.id == activeId }?.name
   }
 
   private companion object {

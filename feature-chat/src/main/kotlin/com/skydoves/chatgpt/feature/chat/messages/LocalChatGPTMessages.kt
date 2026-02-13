@@ -24,6 +24,11 @@ import android.text.method.LinkMovementMethod
 import android.util.TypedValue
 import android.widget.TextView
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,6 +39,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -41,17 +47,23 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
@@ -64,15 +76,17 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -91,6 +105,7 @@ import com.skydoves.chatgpt.feature.chat.theme.ChatGPTStreamTheme
 import io.noties.markwon.AbstractMarkwonPlugin
 import io.noties.markwon.Markwon
 import io.noties.markwon.MarkwonConfiguration
+import kotlinx.coroutines.launch
 
 @Composable
 fun LocalChatGPTMessages(
@@ -125,23 +140,24 @@ fun LocalChatGPTMessages(
   }
 
   ChatGPTStreamTheme {
-    val backgroundBrush = Brush.verticalGradient(
-      colors = listOf(
-        MaterialTheme.colorScheme.surface,
-        MaterialTheme.colorScheme.background,
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-      )
-    )
+    val coroutineScope = rememberCoroutineScope()
+
+    val showScrollToBottom by remember(messages.size, listState) {
+      derivedStateOf {
+        if (messages.isEmpty()) return@derivedStateOf false
+        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+        lastVisible < (messages.lastIndex - 1)
+      }
+    }
 
     Box(
       modifier = Modifier
         .fillMaxSize()
-        .background(backgroundBrush)
+        .background(Color.White)
     ) {
       Column(modifier = Modifier.fillMaxSize()) {
         LocalChatHeader(
           onBackPressed = onBackPressed,
-          activeConfigName = gptConfigs.firstOrNull { it.id == activeGptConfigId }?.name,
           onManageConfigClick = { showConfigSheet = true }
         )
 
@@ -183,6 +199,30 @@ fun LocalChatGPTMessages(
           onPauseClick = viewModel::pauseGenerating
         )
       }
+
+      AnimatedVisibility(
+        modifier = Modifier
+          .align(Alignment.BottomEnd)
+          .padding(end = 16.dp, bottom = 88.dp),
+        visible = showScrollToBottom
+      ) {
+        FloatingActionButton(
+          onClick = {
+            if (messages.isNotEmpty()) {
+              coroutineScope.launch {
+                listState.animateScrollToItem(messages.lastIndex)
+              }
+            }
+          },
+          containerColor = MaterialTheme.colorScheme.surface
+        ) {
+          Icon(
+            imageVector = Icons.Filled.KeyboardArrowDown,
+            contentDescription = stringResource(id = R.string.local_mode_scroll_to_bottom),
+            tint = MaterialTheme.colorScheme.onSurface
+          )
+        }
+      }
     }
 
     if (showConfigSheet) {
@@ -207,46 +247,45 @@ fun LocalChatGPTMessages(
 @Composable
 private fun LocalChatHeader(
   onBackPressed: () -> Unit,
-  activeConfigName: String?,
   onManageConfigClick: () -> Unit
 ) {
   Surface(
     modifier = Modifier.fillMaxWidth(),
-    color = MaterialTheme.colorScheme.surface,
-    tonalElevation = 1.dp
+    color = Color.White,
+    tonalElevation = 0.dp
   ) {
-    Row(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 4.dp, vertical = 2.dp),
-      verticalAlignment = Alignment.CenterVertically
-    ) {
-      IconButton(onClick = onBackPressed) {
-        Icon(
-          imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-          contentDescription = stringResource(id = R.string.local_mode_back)
-        )
-      }
-      Column(modifier = Modifier.weight(1f)) {
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 6.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        IconButton(
+          modifier = Modifier.size(34.dp),
+          onClick = onBackPressed
+        ) {
+          Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+            contentDescription = stringResource(id = R.string.local_mode_back)
+          )
+        }
         Text(
+          modifier = Modifier
+            .weight(1f)
+            .padding(start = 6.dp),
           text = stringResource(id = R.string.local_mode_title),
-          style = MaterialTheme.typography.titleMedium
+          style = MaterialTheme.typography.titleSmall
         )
-        Text(
-          text = stringResource(
-            id = R.string.local_mode_config_current,
-            activeConfigName?.ifBlank { stringResource(id = R.string.local_mode_config_unknown) }
-              ?: stringResource(id = R.string.local_mode_config_unknown)
-          ),
-          style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-      }
-      IconButton(onClick = onManageConfigClick) {
-        Icon(
-          imageVector = Icons.Filled.Settings,
-          contentDescription = stringResource(id = R.string.local_mode_manage_configs)
-        )
+        IconButton(
+          modifier = Modifier.size(34.dp),
+          onClick = onManageConfigClick
+        ) {
+          Icon(
+            imageVector = Icons.Filled.Settings,
+            contentDescription = stringResource(id = R.string.local_mode_manage_configs)
+          )
+        }
       }
     }
   }
@@ -431,24 +470,17 @@ private fun LocalChatMessageBubble(
   emptyResponse: String
 ) {
   val isUser = message.role == USER_ROLE
-  val streamingPlaceholder = stringResource(id = R.string.local_mode_streaming_placeholder)
   val context = LocalContext.current
+  val isTyping = !isUser && message.isStreaming && message.content.isBlank()
   val parsedMessage = remember(
     message.role,
     message.content,
     message.reasoning,
     message.isStreaming,
-    emptyResponse,
-    streamingPlaceholder
+    emptyResponse
   ) {
     ParsedLocalMessage(
-      answer = message.content.trim().ifBlank {
-        if (message.isStreaming) {
-          streamingPlaceholder
-        } else {
-          emptyResponse
-        }
-      },
+      answer = message.content.trim().ifBlank { if (message.isStreaming) "" else emptyResponse },
       reasoning = message.reasoning?.trim()?.ifBlank { null }
     )
   }
@@ -457,6 +489,14 @@ private fun LocalChatMessageBubble(
     modifier = Modifier.fillMaxWidth(),
     horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
   ) {
+    if (!isUser) {
+      AgentAvatar(
+        modifier = Modifier.padding(top = 22.dp, end = 10.dp),
+        name = message.agentName
+          ?.takeIf(String::isNotBlank)
+          ?: stringResource(id = R.string.local_mode_assistant_label)
+      )
+    }
     Column(
       modifier = Modifier.widthIn(max = 320.dp),
       horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
@@ -479,7 +519,9 @@ private fun LocalChatMessageBubble(
           horizontalArrangement = Arrangement.SpaceBetween
         ) {
           Text(
-            text = stringResource(id = R.string.local_mode_assistant_label),
+            text = message.agentName
+              ?.takeIf(String::isNotBlank)
+              ?: stringResource(id = R.string.local_mode_assistant_label),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
@@ -488,6 +530,7 @@ private fun LocalChatMessageBubble(
           CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
             IconButton(
               modifier = Modifier.size(28.dp),
+              enabled = !isTyping,
               onClick = {
                 val clip = ClipData.newPlainText(
                   context.getString(R.string.local_mode_copy_answer),
@@ -506,7 +549,7 @@ private fun LocalChatMessageBubble(
                 modifier = Modifier.size(16.dp),
                 imageVector = Icons.Filled.ContentCopy,
                 contentDescription = stringResource(id = R.string.local_mode_copy_answer),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isTyping) 0.4f else 1f)
               )
             }
           }
@@ -545,11 +588,18 @@ private fun LocalChatMessageBubble(
               color = Color.White
             )
           } else {
-            MarkdownMessageText(
-              markdown = parsedMessage.answer,
-              textColor = MaterialTheme.colorScheme.onSurface,
-              textSizeSp = MaterialTheme.typography.bodyMedium.fontSize.value
-            )
+            if (isTyping) {
+              TypingDots(
+                textStyle = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+            } else {
+              MarkdownMessageText(
+                markdown = parsedMessage.answer,
+                textColor = MaterialTheme.colorScheme.onSurface,
+                textSizeSp = MaterialTheme.typography.bodyMedium.fontSize.value
+              )
+            }
             ReasoningSection(
               index = index,
               reasoning = parsedMessage.reasoning,
@@ -560,6 +610,56 @@ private fun LocalChatMessageBubble(
       }
     }
   }
+}
+
+@Composable
+private fun AgentAvatar(
+  name: String,
+  modifier: Modifier = Modifier
+) {
+  val normalized = remember(name) { name.trim().ifBlank { "Assistant" } }
+  val seed = remember(normalized) { normalized.lowercase().hashCode() }
+  val hue = remember(seed) { ((seed % 360) + 360) % 360 }
+  val base = Color.hsl(hue.toFloat(), 0.55f, 0.42f)
+  val background = lerp(base, MaterialTheme.colorScheme.surface, 0.25f)
+  val initial = remember(normalized) { normalized.firstOrNull()?.uppercase() ?: "A" }
+
+  Surface(
+    modifier = modifier.size(32.dp),
+    shape = RoundedCornerShape(16.dp),
+    color = background
+  ) {
+    Box(contentAlignment = Alignment.Center) {
+      Text(
+        text = initial,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurface
+      )
+    }
+  }
+}
+
+@Composable
+private fun TypingDots(
+  textStyle: androidx.compose.ui.text.TextStyle,
+  color: Color
+) {
+  val transition = rememberInfiniteTransition(label = "typing")
+  val alpha by transition.animateFloat(
+    initialValue = 0.35f,
+    targetValue = 1f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 650),
+      repeatMode = RepeatMode.Reverse
+    ),
+    label = "typingAlpha"
+  )
+
+  Text(
+    text = "…",
+    style = textStyle,
+    color = color.copy(alpha = alpha)
+  )
 }
 
 @Composable
@@ -703,48 +803,97 @@ private fun LocalInputSection(
   onSendClick: () -> Unit,
   onPauseClick: () -> Unit
 ) {
-  Surface(tonalElevation = 3.dp) {
+  Surface(
+    color = Color.White,
+    tonalElevation = 2.dp
+  ) {
     if (sending) {
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 12.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.End
+          .padding(horizontal = 10.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically
       ) {
-        Button(onClick = onPauseClick) {
-          Text(text = stringResource(id = R.string.local_mode_pause))
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+          FilledIconButton(
+            modifier = Modifier.size(32.dp),
+            onClick = onPauseClick
+          ) {
+            Icon(
+              modifier = Modifier.size(14.dp),
+              imageVector = Icons.Filled.Stop,
+              contentDescription = stringResource(id = R.string.local_mode_pause)
+            )
+          }
         }
       }
     } else {
-      Row(
+      Surface(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-      ) {
-        OutlinedTextField(
-          modifier = Modifier.weight(1f),
-          value = input,
-          onValueChange = onInputChange,
-          maxLines = 3,
-          placeholder = {
-            Text(text = stringResource(id = R.string.local_mode_input_placeholder))
-          },
-          keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-          keyboardActions = KeyboardActions(
-            onSend = {
-              if (input.isNotBlank()) {
-                onSendClick()
-              }
-            }
-          )
+          .padding(horizontal = 10.dp, vertical = 2.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White,
+        border = BorderStroke(
+          width = 1.dp,
+          color = Color(0xFFE5E7EB)
         )
-        Button(
-          enabled = input.isNotBlank(),
-          onClick = onSendClick
+      ) {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 2.dp, end = 4.dp, top = 1.dp, bottom = 1.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-          Text(text = stringResource(id = R.string.local_mode_send))
+          CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+            Box(
+              modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 28.dp)
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+              contentAlignment = Alignment.CenterStart
+            ) {
+              if (input.isBlank()) {
+                Text(
+                  text = stringResource(id = R.string.local_mode_input_placeholder),
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+              BasicTextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = input,
+                onValueChange = onInputChange,
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                  color = MaterialTheme.colorScheme.onSurface
+                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(
+                  onSend = {
+                    if (input.isNotBlank()) {
+                      onSendClick()
+                    }
+                  }
+                )
+              )
+            }
+          }
+          CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+            FilledIconButton(
+              modifier = Modifier.size(32.dp),
+              enabled = input.isNotBlank(),
+              onClick = onSendClick
+            ) {
+              Icon(
+                modifier = Modifier.size(16.dp),
+                imageVector = Icons.AutoMirrored.Filled.Send,
+                contentDescription = stringResource(id = R.string.local_mode_send)
+              )
+            }
+          }
         }
       }
     }

@@ -24,6 +24,7 @@
   <string name="local_mode_history_description">Stream is not configured. Continue your local sessions here.</string>
   <string name="local_mode_open_chat">Open chat</string>
   <string name="local_mode_back">Back</string>
+  <string name="local_mode_header_subtitle">Fast local chat with multi-agent switch</string>
   <string name="local_mode_new_chat">New chat</string>
   <string name="local_mode_delete_chat">Delete chat</string>
   <string name="local_mode_copy_answer">Copy</string>
@@ -37,8 +38,12 @@
   <string name="local_mode_user_label">You</string>
   <string name="local_mode_assistant_label">Assistant</string>
   <string name="local_mode_input_placeholder">Type a message</string>
+  <string name="local_mode_input_using_agent">Using: %1$s</string>
+  <string name="local_mode_switch_agent">Switch agent</string>
+  <string name="local_mode_sending">Generating response…</string>
   <string name="local_mode_send">Send</string>
   <string name="local_mode_manage_configs">Manage GPT configs</string>
+  <string name="local_mode_scroll_to_bottom">Scroll to bottom</string>
   <string name="local_mode_config_current">Config: %1$s</string>
   <string name="local_mode_config_unknown">Unknown</string>
   <string name="local_mode_config_sheet_title">GPT Configurations</string>

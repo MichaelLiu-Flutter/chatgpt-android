@@ -27,6 +27,9 @@ data class LocalChatSessionSummary(
 data class LocalChatMessage(
   val role: String,
   val content: String,
+  // Snapshot of the active "agent" (config) when this assistant message was generated.
+  // Stored so chat history can show which agent replied even after switching configs.
+  val agentName: String? = null,
   val reasoning: String? = null,
   val toolEvents: List<LocalChatToolEvent> = emptyList(),
   val isStreaming: Boolean = false,

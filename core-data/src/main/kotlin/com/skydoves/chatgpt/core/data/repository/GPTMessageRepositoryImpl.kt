@@ -488,6 +488,7 @@ internal class GPTMessageRepositoryImpl @Inject constructor(
         val item = messagesArray.optJSONObject(index) ?: return@repeat
         val role = item.optNullableString(JSON_KEY_ROLE) ?: return@repeat
         val content = item.optRawString(JSON_KEY_CONTENT) ?: return@repeat
+        val agentName = item.optNullableString(JSON_KEY_AGENT_NAME)
         val reasoning = item.optRawString(JSON_KEY_REASONING)
         val toolEvents = item.optJSONArray(JSON_KEY_TOOL_EVENTS).toLocalToolEvents()
 
@@ -495,6 +496,7 @@ internal class GPTMessageRepositoryImpl @Inject constructor(
           LocalChatMessage(
             role = role,
             content = content,
+            agentName = agentName,
             reasoning = reasoning,
             toolEvents = toolEvents,
             isStreaming = false,
@@ -514,6 +516,10 @@ internal class GPTMessageRepositoryImpl @Inject constructor(
         .put(JSON_KEY_ROLE, message.role)
         .put(JSON_KEY_CONTENT, message.content)
         .put(JSON_KEY_IS_ERROR, message.isError)
+
+      message.agentName
+        ?.takeIf(String::isNotBlank)
+        ?.let { messageJson.put(JSON_KEY_AGENT_NAME, it) }
 
       message.reasoning
         ?.takeIf(String::isNotBlank)
@@ -591,6 +597,7 @@ internal class GPTMessageRepositoryImpl @Inject constructor(
 
     private const val JSON_KEY_ROLE = "role"
     private const val JSON_KEY_CONTENT = "content"
+    private const val JSON_KEY_AGENT_NAME = "agentName"
     private const val JSON_KEY_REASONING = "reasoning"
     private const val JSON_KEY_TOOL_EVENTS = "toolEvents"
     private const val JSON_KEY_IS_ERROR = "isError"
