@@ -26,6 +26,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -62,9 +63,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Surface
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -138,52 +142,54 @@ fun ChatGPTChannels(
       Box(
         modifier = modifier
           .fillMaxSize()
-          .background(Color.White)
+          .background(MaterialTheme.colorScheme.background)
           .semantics { testTagsAsResourceId = true }
       ) {
         Column(
-          modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-          verticalArrangement = Arrangement.spacedBy(12.dp)
+          modifier = Modifier.fillMaxSize()
         ) {
+          // Header
           Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 20.dp, vertical = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
             Text(
               text = stringResource(id = R.string.local_mode_history_title),
-              style = MaterialTheme.typography.titleMedium,
-              color = Color.Black
+              style = MaterialTheme.typography.headlineMedium,
+              color = MaterialTheme.colorScheme.onBackground
             )
-            Button(
-              onClick = {
-                pendingNewSessionNavigation = true
-                previousTopSessionId = localSessions.firstOrNull()?.id
-                localChatViewModel.createSessionAndEnter()
-              }
-            ) {
-              Text(text = stringResource(id = R.string.local_mode_new_chat))
-            }
           }
 
           if (localSessions.isEmpty()) {
-            Card(
-              modifier = Modifier.fillMaxWidth(),
-              colors = CardDefaults.cardColors(containerColor = Color.White)
+            Box(
+              modifier = Modifier.fillMaxSize(),
+              contentAlignment = Alignment.Center
             ) {
-              Text(
-                modifier = Modifier.padding(16.dp),
-                text = stringResource(id = R.string.local_mode_history_description),
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.Black
-              )
+              Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Filled.AddComment,
+                  contentDescription = null,
+                  modifier = Modifier.size(64.dp),
+                  tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+                Text(
+                  text = stringResource(id = R.string.local_mode_history_description),
+                  style = MaterialTheme.typography.bodyLarge,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  textAlign = TextAlign.Center
+                )
+              }
             }
           } else {
             LazyColumn(
               modifier = Modifier.fillMaxSize(),
-              verticalArrangement = Arrangement.spacedBy(8.dp)
+              contentPadding = PaddingValues(bottom = 80.dp) // Space for FAB
             ) {
               items(
                 items = localSessions,
@@ -202,9 +208,29 @@ fun ChatGPTChannels(
                     localChatViewModel.deleteSession(session.id)
                   }
                 )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
               }
             }
           }
+        }
+
+        // FAB for New Chat
+        FloatingActionButton(
+          modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .padding(24.dp),
+          onClick = {
+            pendingNewSessionNavigation = true
+            previousTopSessionId = localSessions.firstOrNull()?.id
+            localChatViewModel.createSessionAndEnter()
+          },
+          containerColor = MaterialTheme.colorScheme.primary,
+          contentColor = MaterialTheme.colorScheme.onPrimary
+        ) {
+          Icon(
+            imageVector = Icons.Filled.AddComment,
+            contentDescription = stringResource(id = R.string.local_mode_new_chat)
+          )
         }
       }
     }
@@ -295,8 +321,10 @@ private fun DismissibleLocalSessionItem(
     confirmValueChange = { value ->
       if (value == SwipeToDismissBoxValue.EndToStart) {
         onDelete()
+        true
+      } else {
+        false
       }
-      value == SwipeToDismissBoxValue.Settled
     }
   )
 
@@ -305,16 +333,22 @@ private fun DismissibleLocalSessionItem(
     enableDismissFromStartToEnd = false,
     enableDismissFromEndToStart = true,
     backgroundContent = {
+      val color = if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) {
+        MaterialTheme.colorScheme.errorContainer
+      } else {
+        MaterialTheme.colorScheme.background
+      }
       Box(
         modifier = Modifier
           .fillMaxSize()
-          .padding(horizontal = 20.dp),
+          .background(color)
+          .padding(end = 24.dp),
         contentAlignment = Alignment.CenterEnd
       ) {
         Icon(
           imageVector = Icons.Filled.Delete,
           contentDescription = stringResource(id = R.string.local_mode_delete_chat),
-          tint = MaterialTheme.colorScheme.error
+          tint = MaterialTheme.colorScheme.onErrorContainer
         )
       }
     }
@@ -331,36 +365,68 @@ private fun LocalSessionItem(
   session: LocalChatSessionSummary,
   onClick: () -> Unit
 ) {
-  ElevatedCard(
+  Row(
     modifier = Modifier
       .fillMaxWidth()
-      .clickable(onClick = onClick),
-    colors = CardDefaults.elevatedCardColors(containerColor = Color.White)
+      .clickable(onClick = onClick)
+      .background(MaterialTheme.colorScheme.background)
+      .padding(horizontal = 20.dp, vertical = 16.dp),
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(16.dp)
   ) {
+    // Avatar / Icon
+    Surface(
+      modifier = Modifier.size(48.dp),
+      shape = CircleShape,
+      color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+      Box(contentAlignment = Alignment.Center) {
+        Text(
+          text = session.title.firstOrNull()?.toString()?.uppercase() ?: "?",
+          style = MaterialTheme.typography.titleMedium,
+          color = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+      }
+    }
+
+    // Content
     Column(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 12.dp, vertical = 10.dp),
+      modifier = Modifier.weight(1f),
       verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-      Text(
-        text = session.title,
-        style = MaterialTheme.typography.titleSmall,
-        maxLines = 1
-      )
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Text(
+          text = session.title,
+          style = MaterialTheme.typography.titleMedium,
+          color = MaterialTheme.colorScheme.onSurface,
+          maxLines = 1,
+          modifier = Modifier.weight(1f)
+        )
+        Text(
+          text = if ((System.currentTimeMillis() - session.updatedAt) < 60_000) {
+            stringResource(id = R.string.local_mode_just_now)
+          } else {
+            DateUtils.getRelativeTimeSpanString(session.updatedAt).toString()
+          },
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.padding(start = 8.dp)
+        )
+      }
+      
       if (session.preview.isNotBlank()) {
         Text(
           text = session.preview,
-          style = MaterialTheme.typography.bodySmall,
+          style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
-          maxLines = 2
+          maxLines = 2,
+          overflow = TextOverflow.Ellipsis
         )
       }
-      Text(
-        text = DateUtils.getRelativeTimeSpanString(session.updatedAt).toString(),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-      )
     }
   }
 }

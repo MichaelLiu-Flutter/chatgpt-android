@@ -44,8 +44,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -153,7 +156,7 @@ fun LocalChatGPTMessages(
     Box(
       modifier = Modifier
         .fillMaxSize()
-        .background(Color.White)
+        .background(MaterialTheme.colorScheme.surface)
     ) {
       Column(modifier = Modifier.fillMaxSize()) {
         LocalChatHeader(
@@ -245,50 +248,41 @@ fun LocalChatGPTMessages(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun LocalChatHeader(
   onBackPressed: () -> Unit,
   onManageConfigClick: () -> Unit
 ) {
-  Surface(
-    modifier = Modifier.fillMaxWidth(),
-    color = Color.White,
-    tonalElevation = 0.dp
-  ) {
-    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = 6.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        IconButton(
-          modifier = Modifier.size(34.dp),
-          onClick = onBackPressed
-        ) {
-          Icon(
-            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-            contentDescription = stringResource(id = R.string.local_mode_back)
-          )
-        }
-        Text(
-          modifier = Modifier
-            .weight(1f)
-            .padding(start = 6.dp),
-          text = stringResource(id = R.string.local_mode_title),
-          style = MaterialTheme.typography.titleSmall
+  androidx.compose.material3.CenterAlignedTopAppBar(
+    title = {
+      Text(
+        text = stringResource(id = R.string.local_mode_title),
+        style = MaterialTheme.typography.titleMedium
+      )
+    },
+    navigationIcon = {
+      IconButton(onClick = onBackPressed) {
+        Icon(
+          imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+          contentDescription = stringResource(id = R.string.local_mode_back)
         )
-        IconButton(
-          modifier = Modifier.size(34.dp),
-          onClick = onManageConfigClick
-        ) {
-          Icon(
-            imageVector = Icons.Filled.Settings,
-            contentDescription = stringResource(id = R.string.local_mode_manage_configs)
-          )
-        }
       }
-    }
-  }
+    },
+    actions = {
+      IconButton(onClick = onManageConfigClick) {
+        Icon(
+          imageVector = Icons.Filled.Settings,
+          contentDescription = stringResource(id = R.string.local_mode_manage_configs)
+        )
+      }
+    },
+    colors = androidx.compose.material3.TopAppBarDefaults.centerAlignedTopAppBarColors(
+      containerColor = MaterialTheme.colorScheme.surface,
+      titleContentColor = MaterialTheme.colorScheme.onSurface,
+      actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+      navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+  )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -486,128 +480,125 @@ private fun LocalChatMessageBubble(
   }
 
   Row(
-    modifier = Modifier.fillMaxWidth(),
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(vertical = 4.dp), // spacing between messages
     horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
   ) {
     if (!isUser) {
       AgentAvatar(
-        modifier = Modifier.padding(top = 22.dp, end = 10.dp),
+        modifier = Modifier.padding(top = 2.dp, end = 8.dp),
         name = message.agentName
           ?.takeIf(String::isNotBlank)
           ?: stringResource(id = R.string.local_mode_assistant_label)
       )
     }
+    
     Column(
-      modifier = Modifier.widthIn(max = 320.dp),
-      horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
+      horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
+      modifier = Modifier.weight(1f, fill = false) // Allow text to wrap but don't force full width
     ) {
-      if (isUser) {
+      if (!isUser) {
+        // Assistant Name Label
         Text(
-          modifier = Modifier
-            .padding(horizontal = 4.dp, vertical = 2.dp)
-            .align(Alignment.End),
-          text = stringResource(id = R.string.local_mode_user_label),
+          text = message.agentName
+            ?.takeIf(String::isNotBlank)
+            ?: stringResource(id = R.string.local_mode_assistant_label),
           style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.padding(bottom = 2.dp, start = 4.dp)
         )
-      } else {
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 2.dp),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-          Text(
-            text = message.agentName
-              ?.takeIf(String::isNotBlank)
-              ?: stringResource(id = R.string.local_mode_assistant_label),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-          )
-
-          // Keep the copy affordance visually subtle without forcing 48.dp min touch targets.
-          CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-            IconButton(
-              modifier = Modifier.size(28.dp),
-              enabled = !isTyping,
-              onClick = {
-                val clip = ClipData.newPlainText(
-                  context.getString(R.string.local_mode_copy_answer),
-                  parsedMessage.answer
-                )
-                val clipboard = context.getSystemService(ClipboardManager::class.java)
-                clipboard?.setPrimaryClip(clip)
-                android.widget.Toast.makeText(
-                  context,
-                  context.getString(R.string.local_mode_copied_to_clipboard),
-                  android.widget.Toast.LENGTH_SHORT
-                ).show()
-              }
-            ) {
-              Icon(
-                modifier = Modifier.size(16.dp),
-                imageVector = Icons.Filled.ContentCopy,
-                contentDescription = stringResource(id = R.string.local_mode_copy_answer),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (isTyping) 0.4f else 1f)
-              )
-            }
-          }
-        }
       }
+
       Surface(
-        shape = RoundedCornerShape(
-          topStart = if (isUser) 18.dp else 6.dp,
-          topEnd = if (isUser) 6.dp else 18.dp,
-          bottomStart = 18.dp,
-          bottomEnd = 18.dp
-        ),
+        shape = if (isUser) {
+          RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp)
+        } else {
+          RoundedCornerShape(20.dp, 20.dp, 20.dp, 4.dp)
+        },
         color = if (isUser) {
           MaterialTheme.colorScheme.primary
         } else {
-          MaterialTheme.colorScheme.surface
+          MaterialTheme.colorScheme.secondaryContainer
         },
-        border = if (isUser) {
-          null
-        } else {
-          BorderStroke(
-            width = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-          )
-        },
-        tonalElevation = if (isUser) 1.dp else 3.dp
+        tonalElevation = 2.dp
       ) {
         Column(
-          modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+          modifier = Modifier.padding(12.dp),
           verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
           if (isUser) {
             Text(
               text = parsedMessage.answer,
-              style = MaterialTheme.typography.bodyMedium,
-              color = Color.White
+              style = MaterialTheme.typography.bodyLarge,
+              color = MaterialTheme.colorScheme.onPrimary
             )
           } else {
-            if (isTyping) {
-              TypingDots(
-                textStyle = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-              )
-            } else {
-              MarkdownMessageText(
-                markdown = parsedMessage.answer,
-                textColor = MaterialTheme.colorScheme.onSurface,
-                textSizeSp = MaterialTheme.typography.bodyMedium.fontSize.value
-              )
-            }
-            ReasoningSection(
-              index = index,
-              reasoning = parsedMessage.reasoning,
-              isStreaming = message.isStreaming
-            )
+             Box {
+                 Column {
+                    if (isTyping) {
+                      TypingDots(
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                      )
+                    } else {
+                      MarkdownMessageText(
+                        markdown = parsedMessage.answer,
+                        textColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        textSizeSp = MaterialTheme.typography.bodyLarge.fontSize.value
+                      )
+                    }
+                    ReasoningSection(
+                      index = index,
+                      reasoning = parsedMessage.reasoning,
+                      isStreaming = message.isStreaming
+                    )
+                 }
+                 
+                 // Copy Button (Overlay or integrated? Integrated is better for mobile)
+                 // Keeping it simple for now, maybe add it to a long-press menu or a small icon at bottom
+             }
           }
         }
       }
+      
+      // Copy Action / Footer for Assistant
+      if (!isUser && !isTyping) {
+         Row(
+             modifier = Modifier.padding(top = 2.dp),
+             horizontalArrangement = Arrangement.spacedBy(8.dp)
+         ) {
+             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+                IconButton(
+                  modifier = Modifier.size(20.dp),
+                  onClick = {
+                    val clip = ClipData.newPlainText(
+                      context.getString(R.string.local_mode_copy_answer),
+                      parsedMessage.answer
+                    )
+                    val clipboard = context.getSystemService(ClipboardManager::class.java)
+                    clipboard?.setPrimaryClip(clip)
+                    android.widget.Toast.makeText(
+                      context,
+                      context.getString(R.string.local_mode_copied_to_clipboard),
+                      android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                  }
+                ) {
+                  Icon(
+                    imageVector = Icons.Filled.ContentCopy,
+                    contentDescription = stringResource(id = R.string.local_mode_copy_answer),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                  )
+                }
+             }
+         }
+      }
+    }
+    
+    if (isUser) {
+       // Optional: User Avatar or just spacing
+       Spacer(modifier = Modifier.width(8.dp))
     }
   }
 }
@@ -618,22 +609,18 @@ private fun AgentAvatar(
   modifier: Modifier = Modifier
 ) {
   val normalized = remember(name) { name.trim().ifBlank { "Assistant" } }
-  val seed = remember(normalized) { normalized.lowercase().hashCode() }
-  val hue = remember(seed) { ((seed % 360) + 360) % 360 }
-  val base = Color.hsl(hue.toFloat(), 0.55f, 0.42f)
-  val background = lerp(base, MaterialTheme.colorScheme.surface, 0.25f)
   val initial = remember(normalized) { normalized.firstOrNull()?.uppercase() ?: "A" }
 
   Surface(
-    modifier = modifier.size(32.dp),
-    shape = RoundedCornerShape(16.dp),
-    color = background
+    modifier = modifier.size(36.dp),
+    shape = CircleShape,
+    color = MaterialTheme.colorScheme.tertiaryContainer
   ) {
     Box(contentAlignment = Alignment.Center) {
       Text(
         text = initial,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurface
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onTertiaryContainer
       )
     }
   }
@@ -804,97 +791,65 @@ private fun LocalInputSection(
   onPauseClick: () -> Unit
 ) {
   Surface(
-    color = Color.White,
+    color = MaterialTheme.colorScheme.surfaceContainer,
     tonalElevation = 2.dp
   ) {
-    if (sending) {
-      Row(
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(12.dp),
+      verticalAlignment = Alignment.Bottom, // Align bottom for multi-line growth
+      horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+      OutlinedTextField(
         modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = 10.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.End,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-          FilledIconButton(
-            modifier = Modifier.size(32.dp),
-            onClick = onPauseClick
-          ) {
-            Icon(
-              modifier = Modifier.size(14.dp),
-              imageVector = Icons.Filled.Stop,
-              contentDescription = stringResource(id = R.string.local_mode_pause)
-            )
+          .weight(1f)
+          .heightIn(min = 50.dp), // Touch target size
+        value = input,
+        onValueChange = onInputChange,
+        maxLines = 5,
+        placeholder = {
+          Text(
+            text = stringResource(id = R.string.local_mode_input_placeholder),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        },
+        textStyle = MaterialTheme.typography.bodyLarge.copy(
+          color = MaterialTheme.colorScheme.onSurface
+        ),
+        shape = RoundedCornerShape(24.dp),
+        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+          focusedContainerColor = MaterialTheme.colorScheme.surface,
+          unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+          focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+          unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+        ),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+      )
+
+      val canSend = input.isNotBlank() || sending
+      
+      FilledIconButton(
+        modifier = Modifier.size(50.dp), // Match min-height of text field
+        enabled = canSend,
+        onClick = {
+          if (sending) {
+            onPauseClick()
+          } else {
+            onSendClick()
           }
-        }
-      }
-    } else {
-      Surface(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = 10.dp, vertical = 2.dp),
-        shape = RoundedCornerShape(14.dp),
-        color = Color.White,
-        border = BorderStroke(
-          width = 1.dp,
-          color = Color(0xFFE5E7EB)
+        },
+        colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
+          containerColor = if (sending) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primary,
+          contentColor = if (sending) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimary
         )
       ) {
-        Row(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 2.dp, end = 4.dp, top = 1.dp, bottom = 1.dp),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-          CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-            Box(
-              modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 28.dp)
-                .padding(horizontal = 8.dp, vertical = 2.dp),
-              contentAlignment = Alignment.CenterStart
-            ) {
-              if (input.isBlank()) {
-                Text(
-                  text = stringResource(id = R.string.local_mode_input_placeholder),
-                  style = MaterialTheme.typography.bodyMedium,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-              }
-              BasicTextField(
-                modifier = Modifier.fillMaxWidth(),
-                value = input,
-                onValueChange = onInputChange,
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium.copy(
-                  color = MaterialTheme.colorScheme.onSurface
-                ),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(
-                  onSend = {
-                    if (input.isNotBlank()) {
-                      onSendClick()
-                    }
-                  }
-                )
-              )
-            }
-          }
-          CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-            FilledIconButton(
-              modifier = Modifier.size(32.dp),
-              enabled = input.isNotBlank(),
-              onClick = onSendClick
-            ) {
-              Icon(
-                modifier = Modifier.size(16.dp),
-                imageVector = Icons.AutoMirrored.Filled.Send,
-                contentDescription = stringResource(id = R.string.local_mode_send)
-              )
-            }
-          }
-        }
+        Icon(
+          imageVector = if (sending) Icons.Filled.Stop else Icons.AutoMirrored.Filled.Send,
+          contentDescription = if (sending) stringResource(id = R.string.local_mode_pause) else stringResource(id = R.string.local_mode_send),
+          modifier = Modifier.size(24.dp)
+        )
       }
     }
   }

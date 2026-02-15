@@ -65,4 +65,5 @@
   <string name="local_mode_tool_calls_empty">本次回复没有触发工具调用。</string>
   <string name="local_mode_tool_calls_pending">正在等待工具调用事件…</string>
   <string name="local_mode_empty_response">(empty)</string>
+  <string name="local_mode_just_now">刚刚</string>
 </resources>
